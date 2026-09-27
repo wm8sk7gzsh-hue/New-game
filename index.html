@@ -1,0 +1,3056 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Моя игра</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Подключаем Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div id="game-container">
+    <!-- сюда вставляешь свою игру -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Cosmic Glider</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    background: #0a0a1a;
+    overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    touch-action: none;
+    overscroll-behavior: none;
+  }
+  #wrap {
+    position: relative;
+    width: 100%; height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: none;
+  }
+  canvas {
+    display: block;
+    background: #0a0a1a;
+    box-shadow: 0 0 80px rgba(120, 80, 255, 0.5), 0 0 20px rgba(80, 200, 255, 0.3);
+    border-radius: 12px;
+    cursor: pointer;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  #hud {
+    position: absolute;
+    top: 12px; left: 12px; right: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    pointer-events: none;
+    color: #fff;
+    font-weight: 700;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+    font-size: 18px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  #hud.visible { opacity: 1; }
+  #hud .pill {
+    background: rgba(0,0,0,0.35);
+    padding: 6px 14px;
+    border-radius: 999px;
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  #zone {
+    position: absolute;
+    top: 60px; left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-shadow: 0 0 12px currentColor;
+    opacity: 0;
+    transition: opacity 0.4s;
+    pointer-events: none;
+    padding: 4px 14px;
+    border-radius: 999px;
+    background: rgba(0,0,0,0.4);
+    backdrop-filter: blur(6px);
+  }
+  #zone.visible { opacity: 1; }
+  #combo {
+    position: absolute;
+    top: 100px; left: 50%;
+    transform: translateX(-50%);
+    color: #ffe066;
+    font-size: 26px;
+    font-weight: 800;
+    text-shadow: 0 0 16px #ffb800, 0 2px 4px #000;
+    opacity: 0;
+    transition: opacity 0.25s;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+  <div id="hud">
+    <div class="pill">🏆 <span id="score">0</span></div>
+    <div class="pill">🥇 <span id="best">0</span></div>
+  </div>
+  <div id="zone"></div>
+  <div id="combo"></div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ============ НАСТРОЙКИ ============
+  const CFG = {
+    width: 480,
+    height: 720,
+    gravity: 0.42,
+    flapPower: -7.6,
+    maxFallSpeed: 12,
+    birdX: 130,
+    birdRadius: 15,
+    pipeWidth: 70,
+    pipeGap: 185,
+    pipeSpeed: 2.6,
+    spawnInterval: 1750,
+    groundHeight: 60,
+    dayDuration: 20,
+    inputThrottle: 40,
+    powerRadius: 20,
+    zoneSize: 20,
+    transitionSpeed: 0.10,
+    pipeMaxAngle: 0.04,
+    shieldDuration: 3,      // ★ сколько труб щит действует
+  };
+
+  const ZONES = [
+    { name: 'Земля',           hue: 210, nebula: ['#1a3a6a', '#0a1a3a'], type: 'earth' },
+    { name: 'Марс',            hue: 15,  nebula: ['#6a2010', '#2a0808'], type: 'mars' },
+    { name: 'Пояс астероидов', hue: 35,  nebula: ['#3a2a10', '#1a1008'], type: 'asteroids' },
+    { name: 'Юпитер',          hue: 30,  nebula: ['#6a4a20', '#2a1a08'], type: 'jupiter' },
+    { name: 'Сатурн',          hue: 45,  nebula: ['#5a4a30', '#201808'], type: 'saturn' },
+    { name: 'Уран',            hue: 180, nebula: ['#1a5a6a', '#08202a'], type: 'uranus' },
+    { name: 'Нептун',          hue: 230, nebula: ['#102a6a', '#08103a'], type: 'neptune' },
+    { name: 'Млечный Путь',    hue: 270, nebula: ['#3a1a6a', '#100830'], type: 'milkyway' },
+    { name: 'Андромеда',       hue: 320, nebula: ['#6a1a5a', '#2a0828'], type: 'andromeda' },
+    { name: 'Глубокий космос', hue: 0,   nebula: ['#0a0a2a', '#000010'], type: 'deepspace' },
+  ];
+
+  const SKINS = [
+    { id: 'default', name: 'Стандарт', rarity: 'common', unlockZone: 0, unlockScore: 0,
+      colors: { hullTop: '#e8f4ff', hullMid: '#a8c8e8', hullLow: '#5a7aa8', hullBot: '#2a3a5a',
+        wing: '#4a6a9a', cockpit1: '#e0f4ff', cockpit2: '#5ac0ff', cockpit3: '#1a5a9a',
+        stroke: 'rgba(140,220,255,0.75)',
+        exhaust1: 'rgba(255,255,255,0.95)', exhaust2: 'rgba(120,220,255,0.9)',
+        exhaust3: 'rgba(80,140,255,0.5)', exhaust4: 'rgba(80,140,255,0)',
+        thruster: 'rgba(120,220,255,1)', light: 'rgba(255,240,140,0.9)' } },
+    { id: 'mars', name: 'Красная пыль', rarity: 'common', unlockZone: 1, unlockScore: 20,
+      colors: { hullTop: '#ffd8b0', hullMid: '#e08040', hullLow: '#9a4018', hullBot: '#401008',
+        wing: '#7a2810', cockpit1: '#ffe8c0', cockpit2: '#ff9040', cockpit3: '#602010',
+        stroke: 'rgba(255,180,120,0.85)',
+        exhaust1: 'rgba(255,255,220,0.95)', exhaust2: 'rgba(255,180,80,0.9)',
+        exhaust3: 'rgba(255,100,40,0.5)', exhaust4: 'rgba(255,100,40,0)',
+        thruster: 'rgba(255,180,80,1)', light: 'rgba(255,220,140,0.9)' } },
+    { id: 'asteroid', name: 'Метеорит', rarity: 'uncommon', unlockZone: 2, unlockScore: 40,
+      colors: { hullTop: '#b8a898', hullMid: '#6a5a4a', hullLow: '#3a2a1a', hullBot: '#100808',
+        wing: '#2a1a10', cockpit1: '#ffd8a0', cockpit2: '#c08040', cockpit3: '#402008',
+        stroke: 'rgba(180,140,100,0.8)',
+        exhaust1: 'rgba(255,240,200,0.95)', exhaust2: 'rgba(255,160,80,0.9)',
+        exhaust3: 'rgba(200,80,40,0.5)', exhaust4: 'rgba(200,80,40,0)',
+        thruster: 'rgba(255,180,100,1)', light: 'rgba(255,220,150,0.9)', craters: true } },
+    { id: 'jupiter', name: 'Газовый гигант', rarity: 'uncommon', unlockZone: 3, unlockScore: 60,
+      colors: { hullTop: '#fff0d0', hullMid: '#e0b070', hullLow: '#a07040', hullBot: '#5a3010',
+        wing: '#8a5020', cockpit1: '#fff8e0', cockpit2: '#ffc060', cockpit3: '#603010',
+        stroke: 'rgba(255,220,160,0.85)',
+        exhaust1: 'rgba(255,255,220,0.95)', exhaust2: 'rgba(255,200,120,0.9)',
+        exhaust3: 'rgba(255,140,60,0.5)', exhaust4: 'rgba(255,140,60,0)',
+        thruster: 'rgba(255,200,120,1)', light: 'rgba(255,240,180,0.9)', stripes: true } },
+    { id: 'saturn', name: 'Ледяное кольцо', rarity: 'rare', unlockZone: 4, unlockScore: 80,
+      colors: { hullTop: '#fff8e0', hullMid: '#e8c880', hullLow: '#b09040', hullBot: '#605018',
+        wing: '#907030', cockpit1: '#fffce0', cockpit2: '#ffd860', cockpit3: '#605020',
+        stroke: 'rgba(255,230,160,0.9)',
+        exhaust1: 'rgba(255,255,240,0.95)', exhaust2: 'rgba(255,230,140,0.9)',
+        exhaust3: 'rgba(255,180,80,0.5)', exhaust4: 'rgba(255,180,80,0)',
+        thruster: 'rgba(255,230,140,1)', light: 'rgba(255,250,200,0.95)', icyRing: true } },
+    { id: 'uranus', name: 'Кристалл', rarity: 'rare', unlockZone: 5, unlockScore: 100,
+      colors: { hullTop: '#e0ffff', hullMid: '#80e0e8', hullLow: '#30a0b0', hullBot: '#08505a',
+        wing: '#187880', cockpit1: '#f0ffff', cockpit2: '#60e8f0', cockpit3: '#105860',
+        stroke: 'rgba(160,240,255,0.9)',
+        exhaust1: 'rgba(255,255,255,1)', exhaust2: 'rgba(160,240,255,0.95)',
+        exhaust3: 'rgba(60,200,240,0.5)', exhaust4: 'rgba(60,200,240,0)',
+        thruster: 'rgba(160,240,255,1)', light: 'rgba(220,255,255,0.95)', crystals: true } },
+    { id: 'neptune', name: 'Глубина', rarity: 'rare', unlockZone: 6, unlockScore: 120,
+      colors: { hullTop: '#c0d8ff', hullMid: '#4060d0', hullLow: '#203080', hullBot: '#08103a',
+        wing: '#182870', cockpit1: '#e0f0ff', cockpit2: '#6090ff', cockpit3: '#102060',
+        stroke: 'rgba(140,180,255,0.9)',
+        exhaust1: 'rgba(255,255,255,1)', exhaust2: 'rgba(140,180,255,0.95)',
+        exhaust3: 'rgba(60,120,255,0.5)', exhaust4: 'rgba(60,120,255,0)',
+        thruster: 'rgba(140,180,255,1)', light: 'rgba(200,220,255,0.95)', deepWaves: true } },
+    { id: 'milkyway', name: 'Млечный', rarity: 'epic', unlockZone: 7, unlockScore: 140,
+      colors: { hullTop: '#ffffff', hullMid: '#d0b0ff', hullLow: '#8060c0', hullBot: '#301860',
+        wing: '#503090', cockpit1: '#ffffff', cockpit2: '#e0c0ff', cockpit3: '#402080',
+        stroke: 'rgba(220,180,255,0.95)',
+        exhaust1: 'rgba(255,255,255,1)', exhaust2: 'rgba(220,180,255,0.95)',
+        exhaust3: 'rgba(180,120,255,0.5)', exhaust4: 'rgba(180,120,255,0)',
+        thruster: 'rgba(220,180,255,1)', light: 'rgba(255,240,255,0.95)', stardust: true } },
+    { id: 'andromeda', name: 'Туманность', rarity: 'epic', unlockZone: 8, unlockScore: 160,
+      colors: { hullTop: '#ffe0ff', hullMid: '#ff80d0', hullLow: '#a03090', hullBot: '#400030',
+        wing: '#701870', cockpit1: '#fff0ff', cockpit2: '#ff90e0', cockpit3: '#501050',
+        stroke: 'rgba(255,160,240,0.95)',
+        exhaust1: 'rgba(255,255,255,1)', exhaust2: 'rgba(255,160,240,0.95)',
+        exhaust3: 'rgba(220,80,200,0.5)', exhaust4: 'rgba(220,80,200,0)',
+        thruster: 'rgba(255,160,240,1)', light: 'rgba(255,220,255,0.95)', nebulaMist: true } },
+    { id: 'infinity', name: 'Бесконечность', rarity: 'legendary', unlockZone: 9, unlockScore: 180,
+      colors: { hullTop: '#ffffff', hullMid: '#ff8080', hullLow: '#8060ff', hullBot: '#200050',
+        wing: '#4040a0', cockpit1: '#ffffff', cockpit2: '#ff60ff', cockpit3: '#400080',
+        stroke: 'rgba(255,255,255,0.95)',
+        exhaust1: 'rgba(255,255,255,1)', exhaust2: 'rgba(255,200,255,0.95)',
+        exhaust3: 'rgba(200,150,255,0.5)', exhaust4: 'rgba(200,150,255,0)',
+        thruster: 'rgba(255,200,255,1)', light: 'rgba(255,255,255,0.95)',
+        rainbow: true, infinity: true } },
+  ];
+
+  const RARITY = {
+    common:    { name: 'Обычный',     color: '#a0a0a0', glow: 'rgba(160,160,160,0.5)' },
+    uncommon:  { name: 'Необычный',   color: '#5ce87a', glow: 'rgba(92,232,122,0.5)' },
+    rare:      { name: 'Редкий',      color: '#4aa8ff', glow: 'rgba(74,168,255,0.6)' },
+    epic:      { name: 'Эпический',   color: '#b060ff', glow: 'rgba(176,96,255,0.6)' },
+    legendary: { name: 'Легендарный', color: '#ffb800', glow: 'rgba(255,184,0,0.7)' },
+  };
+
+  // ============ CANVAS ============
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const hudEl = document.getElementById('hud');
+  const scoreEl = document.getElementById('score');
+  const bestEl  = document.getElementById('best');
+  const zoneEl = document.getElementById('zone');
+  const comboEl = document.getElementById('combo');
+
+  function resize() {
+    const maxW = window.innerWidth - 20;
+    const maxH = window.innerHeight - 20;
+    const scale = Math.min(maxW / CFG.width, maxH / CFG.height, 1.4);
+    canvas.width  = CFG.width;
+    canvas.height = CFG.height;
+    canvas.style.width  = CFG.width  * scale + 'px';
+    canvas.style.height = CFG.height * scale + 'px';
+  }
+  window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', () => setTimeout(resize, 100));
+  resize();
+
+  // ============ УТИЛИТЫ ============
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+
+  function hexToRgb(hex) {
+    const h = hex.replace('#', '');
+    return { r: parseInt(h.substring(0, 2), 16), g: parseInt(h.substring(2, 4), 16), b: parseInt(h.substring(4, 6), 16) };
+  }
+  function mixHex(a, b, t) {
+    const pa = hexToRgb(a), pb = hexToRgb(b);
+    return `#${[lerp(pa.r, pb.r, t), lerp(pa.g, pb.g, t), lerp(pa.b, pb.b, t)]
+      .map(v => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
+  }
+  function mixHue(a, b, t) {
+    let d = b - a;
+    if (d > 180) d -= 360;
+    if (d < -180) d += 360;
+    return (a + d * t + 360) % 360;
+  }
+  function hslToRgb(h, s, l) {
+    s /= 100; l /= 100;
+    const k = n => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    return { r: 255 * f(0), g: 255 * f(8), b: 255 * f(4) };
+  }
+  function mixRgb(a, b, t) {
+    return { r: lerp(a.r, b.r, t), g: lerp(a.g, b.g, t), b: lerp(a.b, b.b, t) };
+  }
+
+  // ============ ХРАНИЛИЩЕ ============
+  const Storage = {
+    KEY_BEST: 'cg_best', KEY_HISTORY: 'cg_history',
+    KEY_SKINS: 'cg_skins', KEY_SELECTED: 'cg_selected_skin',
+
+    getBest() { return +(localStorage.getItem(this.KEY_BEST) || 0); },
+    setBest(v) { if (v > this.getBest()) localStorage.setItem(this.KEY_BEST, v); },
+    getHistory() { try { return JSON.parse(localStorage.getItem(this.KEY_HISTORY) || '[]'); } catch { return []; } },
+    addAttempt(score) {
+      const h = this.getHistory();
+      h.push({ score, date: Date.now() });
+      while (h.length > 100) h.shift();
+      localStorage.setItem(this.KEY_HISTORY, JSON.stringify(h));
+    },
+    getTopScores(limit = 10) {
+      const h = this.getHistory();
+      const sorted = [...h].sort((a, b) => b.score - a.score);
+      const seen = new Set();
+      const top = [];
+      for (const item of sorted) {
+        if (top.length >= limit) break;
+        if (seen.has(item.score)) continue;
+        seen.add(item.score);
+        top.push(item);
+      }
+      return top;
+    },
+    getRecentAttempts(limit = 20) { return this.getHistory().slice(-limit).reverse(); },
+    getUnlockedSkins() {
+      try { return JSON.parse(localStorage.getItem(this.KEY_SKINS) || '["default"]'); }
+      catch { return ['default']; }
+    },
+    unlockSkin(id) {
+      const skins = this.getUnlockedSkins();
+      if (!skins.includes(id)) {
+        skins.push(id);
+        localStorage.setItem(this.KEY_SKINS, JSON.stringify(skins));
+        return true;
+      }
+      return false;
+    },
+    getSelectedSkin() { return localStorage.getItem(this.KEY_SELECTED) || 'default'; },
+    setSelectedSkin(id) { localStorage.setItem(this.KEY_SELECTED, id); },
+    getSelectedSkinData() {
+      const id = this.getSelectedSkin();
+      return SKINS.find(s => s.id === id) || SKINS[0];
+    },
+    checkUnlocks(best) {
+      let anyNew = false;
+      for (const s of SKINS) {
+        if (best >= s.unlockScore) {
+          if (this.unlockSkin(s.id)) anyNew = true;
+        }
+      }
+      return anyNew;
+    },
+    clear() {
+      localStorage.removeItem(this.KEY_BEST);
+      localStorage.removeItem(this.KEY_HISTORY);
+    }
+  };
+
+  function formatDate(ts) {
+    const d = new Date(ts);
+    return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()} ` +
+           `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+
+  // ============ ЗВУК ============
+  const Sound = (() => {
+    let actx = null;
+    function ensure() {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === 'suspended') actx.resume();
+      return actx;
+    }
+    function beep(freq, dur = 0.08, type = 'square', vol = 0.08) {
+      try {
+        const a = ensure();
+        const o = a.createOscillator();
+        const g = a.createGain();
+        o.type = type;
+        o.frequency.value = freq;
+        g.gain.value = vol;
+        o.connect(g).connect(a.destination);
+        o.start();
+        g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + dur);
+        o.stop(a.currentTime + dur);
+      } catch (e) {}
+    }
+    return {
+      flap: () => { beep(180, 0.08, 'sawtooth', 0.05); setTimeout(() => beep(280, 0.06, 'triangle', 0.04), 20); },
+      score: () => beep(880, 0.09, 'sine', 0.07),
+      power: () => { beep(660, 0.07); setTimeout(() => beep(990, 0.09), 70); },
+      zone: () => { beep(440, 0.15, 'sine', 0.1); setTimeout(() => beep(660, 0.15, 'sine', 0.1), 120); setTimeout(() => beep(880, 0.2, 'sine', 0.1), 240); },
+      hit:   () => beep(140, 0.25, 'sawtooth', 0.15),
+      die:   () => { beep(220, 0.2, 'sawtooth', 0.12); setTimeout(() => beep(120, 0.35, 'sawtooth', 0.12), 150); },
+      click: () => beep(700, 0.05, 'sine', 0.06),
+      unlock: () => { beep(660, 0.1, 'sine', 0.1); setTimeout(() => beep(880, 0.1, 'sine', 0.1), 100); setTimeout(() => beep(1320, 0.2, 'sine', 0.1), 200); },
+    };
+  })();
+
+  // ============ СОСТОЯНИЯ ============
+  const Screen = { MAIN_MENU: 0, PLAY: 1, DEAD: 2, LEADERBOARD: 3, ATTEMPTS: 4, EXIT: 5, SKINS: 6 };
+  let screen = Screen.MAIN_MENU;
+
+  // ============ КНОПКИ ============
+  let currentButtons = [];
+
+  function clearButtons() { currentButtons = []; }
+  function makeButton(x, y, w, h, text, action, primary = false) {
+    return { x, y, w, h, text, action, primary, hover: false };
+  }
+  function isInside(btn, mx, my) {
+    return mx >= btn.x && mx <= btn.x + btn.w && my >= btn.y && my <= btn.y + btn.h;
+  }
+
+  function drawButton(btn) {
+    if (!btn.text) return;
+    const isHover = btn.hover;
+    ctx.save();
+    ctx.shadowColor = btn.primary ? 'rgba(80,255,140,0.6)' : 'rgba(150,120,255,0.5)';
+    ctx.shadowBlur = isHover ? 28 : 16;
+    const g = ctx.createLinearGradient(btn.x, btn.y, btn.x, btn.y + btn.h);
+    if (btn.primary) {
+      g.addColorStop(0, isHover ? '#5cffa0' : '#3ddc84');
+      g.addColorStop(1, isHover ? '#2ecc71' : '#1a9e58');
+    } else {
+      g.addColorStop(0, isHover ? '#5a3f9e' : '#3a2870');
+      g.addColorStop(1, isHover ? '#3a2870' : '#241a48');
+    }
+    ctx.fillStyle = g;
+    roundRect(ctx, btn.x, btn.y, btn.w, btn.h, 14);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = btn.primary ? 'rgba(180,255,200,0.95)' : 'rgba(160,140,255,0.8)';
+    ctx.lineWidth = 2;
+    roundRect(ctx, btn.x, btn.y, btn.w, btn.h, 14);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    roundRect(ctx, btn.x + 4, btn.y + 4, btn.w - 8, btn.h / 2 - 4, 10);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 22px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 4;
+    ctx.fillText(btn.text, btn.x + btn.w / 2, btn.y + btn.h / 2 + 1);
+    ctx.restore();
+    ctx.textAlign = 'start';
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // ============ ИГРОВОЕ СОСТОЯНИЕ ============
+  const game = {
+    bird: { x: CFG.birdX, y: CFG.height / 2, vy: 0, angle: 0, alive: true },
+    pipes: [], powers: [], particles: [], stars: [], clouds: [],
+    nebulas: [], auroras: [], planets: [], moons: [], asteroids: [],
+    quasars: [], comets: [], cometTimer: 0, milkyway: null,
+    currentZone: 0, targetZone: 0, zoneTransition: 1,
+    score: 0, best: Storage.getBest(),
+    combo: 0, comboTimer: 0, time: 0, spawnTimer: 0,
+    shield: 0,                 // ★ 0 = нет щита, 1 = активен
+    shieldPipeCounter: 0,      // ★ сколько труб пройдено с момента подбора
+    slowmo: 0, shake: 0, flashRed: 0, deadTimer: 0, saved: false,
+  };
+
+  bestEl.textContent = game.best;
+
+  // ============ ФОН ============
+  function initBackground() {
+    game.stars = [];
+    for (let i = 0; i < 160; i++) {
+      const layer = i < 80 ? 0 : i < 130 ? 1 : 2;
+      game.stars.push({
+        x: Math.random() * CFG.width,
+        y: Math.random() * (CFG.height - CFG.groundHeight),
+        r: layer === 0 ? rand(0.3, 0.7) : layer === 1 ? rand(0.8, 1.3) : rand(1.5, 2.3),
+        speed: layer === 0 ? rand(0.4, 0.9) : layer === 1 ? rand(1.1, 1.8) : rand(2.0, 3.2),
+        alpha: layer === 0 ? rand(0.3, 0.6) : layer === 1 ? rand(0.5, 0.85) : rand(0.8, 1),
+        twinkle: Math.random() * Math.PI * 2,
+        twinkleSpeed: rand(1, 3),
+        color: Math.random() < 0.15 ? '#ffe0f0' : Math.random() < 0.3 ? '#c0e0ff' : '#ffffff',
+      });
+    }
+
+    game.nebulas = [];
+    for (let i = 0; i < 4; i++) {
+      game.nebulas.push({
+        x: Math.random() * CFG.width,
+        y: rand(50, CFG.height - 200),
+        rx: rand(180, 340), ry: rand(100, 220),
+        color1: '#3a1060', color2: '#1a0430',
+        speed: rand(0.02, 0.06),
+        alpha: rand(0.35, 0.55),
+        rot: Math.random() * Math.PI,
+      });
+    }
+
+    game.auroras = [];
+    for (let i = 0; i < 3; i++) {
+      game.auroras.push({
+        hue: [180, 280, 320][i],
+        yBase: 40 + i * 40,
+        amplitude: rand(15, 35),
+        frequency: rand(0.004, 0.008),
+        phase: Math.random() * Math.PI * 2,
+        speed: rand(0.3, 0.7), alpha: 0.15, width: 30 + i * 10,
+      });
+    }
+
+    game.planets = [
+      { x: 100, y: 180, r: 55, hue: 210, hasRing: false, ringAngle: -0.3, phase: 0, speed: 0.008,
+        rotation: 0, rotationSpeed: 0.004, zoneIdx: 0, isMoon: false },
+      { x: 380, y: 420, r: 30, hue: 45, hasRing: false, ringAngle: 0.4, phase: Math.PI, speed: 0.012,
+        rotation: 0, rotationSpeed: 0.006, zoneIdx: 0, isMoon: true },
+    ];
+
+    game.moons = [
+      { angle: 0, radius: 110, size: 6, speed: 0.6 },
+      { angle: 2.5, radius: 135, size: 4, speed: 0.45 },
+    ];
+
+    game.asteroids = [];
+    for (let i = 0; i < 24; i++) {
+      game.asteroids.push({
+        x: Math.random() * CFG.width,
+        y: Math.random() * (CFG.height - CFG.groundHeight),
+        r: rand(2, 8),
+        speed: rand(0.8, 2.2),
+        rot: Math.random() * Math.PI,
+        rotSpeed: rand(-0.05, 0.05),
+        shape: Array.from({length: 7}, () => rand(0.7, 1.3)),
+      });
+    }
+
+    game.quasars = [];
+    for (let i = 0; i < 3; i++) {
+      game.quasars.push({
+        x: rand(80, CFG.width - 80),
+        y: rand(80, 350),
+        r: rand(3, 6),
+        phase: Math.random() * Math.PI * 2,
+        pulseSpeed: rand(1.5, 3),
+        hue: rand(180, 320),
+      });
+    }
+
+    game.comets = [];
+    game.cometTimer = rand(2, 5);
+
+    game.milkyway = { angle: -0.4, thickness: 100, alpha: 0, phase: 0 };
+
+    game.currentZone = 0;
+    game.targetZone = 0;
+    game.zoneTransition = 1;
+
+    applyZoneColors(0);
+  }
+
+  function getZoneForScore(score) {
+    return Math.min(Math.floor(score / CFG.zoneSize), ZONES.length - 1);
+  }
+
+  function applyZoneColors(zoneIdx) {
+    const z = ZONES[zoneIdx];
+    for (const n of game.nebulas) { n.color1 = z.nebula[0]; n.color2 = z.nebula[1]; }
+    game.auroras[0].hue = z.hue;
+    game.auroras[1].hue = (z.hue + 60) % 360;
+    game.auroras[2].hue = (z.hue + 120) % 360;
+    game.planets[0].hue = z.hue;
+    game.planets[1].hue = (z.hue + 40) % 360;
+    game.planets[0].zoneIdx = zoneIdx;
+    game.planets[1].zoneIdx = zoneIdx;
+    game.planets[0].hasRing = (zoneIdx === 4 || zoneIdx === 5);
+    if (zoneIdx === 4) game.planets[0].ringAngle = -0.35;
+    if (zoneIdx === 5) game.planets[0].ringAngle = 1.3;
+    game.planets[1].hasRing = false;
+  }
+
+  function updateZoneTransition(dt) {
+    const newZone = getZoneForScore(game.score);
+
+    if (newZone !== game.targetZone) {
+      game.targetZone = newZone;
+      game.zoneTransition = 0;
+      zoneEl.textContent = ZONES[newZone].name;
+      zoneEl.style.color = `hsl(${ZONES[newZone].hue}, 80%, 75%)`;
+      zoneEl.classList.add('visible');
+      clearTimeout(updateZoneTransition._t);
+      updateZoneTransition._t = setTimeout(() => zoneEl.classList.remove('visible'), 2500);
+      Sound.zone();
+
+      const newSkin = SKINS.find(s => s.unlockZone === newZone);
+      if (newSkin && Storage.unlockSkin(newSkin.id)) {
+        setTimeout(() => {
+          Sound.unlock();
+          showCombo(`🎨 ОТКРЫТ СКИН: ${newSkin.name}`);
+        }, 600);
+      }
+    }
+
+    if (game.zoneTransition < 1) {
+      game.zoneTransition = Math.min(1, game.zoneTransition + CFG.transitionSpeed * (dt / 16.666));
+      if (game.zoneTransition >= 1) {
+        game.currentZone = game.targetZone;
+        applyZoneColors(game.currentZone);
+      } else {
+        const from = ZONES[game.currentZone];
+        const to = ZONES[game.targetZone];
+        const t = game.zoneTransition;
+        for (const n of game.nebulas) {
+          n.color1 = mixHex(from.nebula[0], to.nebula[0], t);
+          n.color2 = mixHex(from.nebula[1], to.nebula[1], t);
+        }
+        game.auroras[0].hue = mixHue(from.hue, to.hue, t);
+        game.auroras[1].hue = mixHue((from.hue + 60) % 360, (to.hue + 60) % 360, t);
+        game.auroras[2].hue = mixHue((from.hue + 120) % 360, (to.hue + 120) % 360, t);
+        game.planets[0].hue = mixHue(from.hue, to.hue, t);
+        game.planets[1].hue = mixHue((from.hue + 40) % 360, (to.hue + 40) % 360, t);
+      }
+    }
+  }
+
+  initBackground();
+
+  // ============ ЧАСТИЦЫ ============
+  function spawnParticles(x, y, count, color, opts = {}) {
+    for (let i = 0; i < count; i++) {
+      const a = opts.angle !== undefined ? opts.angle + rand(-0.9, 0.9) : rand(0, Math.PI * 2);
+      const sp = rand(opts.speedMin ?? 1, opts.speedMax ?? 4);
+      const life = opts.life ?? rand(0.4, 0.9);
+      game.particles.push({
+        x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+        life, maxLife: life,
+        r: opts.r ?? rand(1.5, 3.5),
+        color, gravity: opts.gravity ?? 0.12,
+      });
+    }
+  }
+
+  // ============ ИГРА ============
+  function flap() {
+    if (screen === Screen.PLAY && game.bird.alive) {
+      const boost = game.slowmo > 0 ? 1.15 : 1;
+      game.bird.vy = CFG.flapPower * boost;
+      Sound.flap();
+      spawnParticles(game.bird.x - CFG.birdRadius - 5, game.bird.y, 8, 'rgba(140,220,255,0.95)', {
+        angle: Math.PI, speedMin: 2, speedMax: 5, life: 0.5, r: 2.5, gravity: 0.02
+      });
+      spawnParticles(game.bird.x - CFG.birdRadius - 5, game.bird.y, 4, 'rgba(255,255,255,0.95)', {
+        angle: Math.PI, speedMin: 3, speedMax: 6, life: 0.3, r: 1.5, gravity: 0.02
+      });
+    }
+  }
+
+  function startGame() {
+    resetGame();
+    clearButtons();
+    screen = Screen.PLAY;
+    hudEl.classList.add('visible');
+    game.bird.vy = CFG.flapPower;
+    Sound.flap();
+    Storage.checkUnlocks(Storage.getBest());
+  }
+
+  function resetGame() {
+    game.bird = { x: CFG.birdX, y: CFG.height / 2, vy: 0, angle: 0, alive: true };
+    game.pipes = [];
+    game.powers = [];
+    game.particles = [];
+    game.score = 0;
+    game.combo = 0;
+    game.comboTimer = 0;
+    game.time = 0;
+    game.spawnTimer = 0;
+    game.shield = 0;
+    game.shieldPipeCounter = 0;   // ★ сброс счётчика щита
+    game.slowmo = 0;
+    game.shake = 0;
+    game.flashRed = 0;
+    game.deadTimer = 0;
+    game.saved = false;
+    game.currentZone = 0;
+    game.targetZone = 0;
+    game.zoneTransition = 1;
+    applyZoneColors(0);
+    zoneEl.classList.remove('visible');
+    updateHUD();
+  }
+
+  function goToMainMenu() { clearButtons(); screen = Screen.MAIN_MENU; hudEl.classList.remove('visible'); }
+  function goToLeaderboard() { clearButtons(); screen = Screen.LEADERBOARD; hudEl.classList.remove('visible'); }
+  function goToAttempts() { clearButtons(); screen = Screen.ATTEMPTS; hudEl.classList.remove('visible'); }
+  function goToSkins() { clearButtons(); screen = Screen.SKINS; hudEl.classList.remove('visible'); }
+  function goToExit() {
+    clearButtons(); screen = Screen.EXIT; hudEl.classList.remove('visible');
+    setTimeout(() => { try { window.close(); } catch (e) {} }, 800);
+  }
+
+  function updateHUD() {
+    scoreEl.textContent = game.score;
+    bestEl.textContent = game.best;
+  }
+
+  function showCombo(text) {
+    comboEl.textContent = text;
+    comboEl.style.opacity = '1';
+    clearTimeout(showCombo._t);
+    showCombo._t = setTimeout(() => comboEl.style.opacity = '0', 2000);
+  }
+
+  // ============ СПАВН ============
+  function spawnPipe() {
+    const margin = 60;
+    const minY = margin;
+    const maxY = CFG.height - CFG.groundHeight - margin - CFG.pipeGap;
+    const gapY = rand(minY, maxY);
+
+    const rotChance = Math.min(0.25, 0.05 + game.score * 0.01);
+    const rotating = Math.random() < rotChance;
+
+    const zoneAtSpawn = getZoneForScore(game.score);
+
+    const seed = Math.random() * 1000;
+    const pointsTop = [];
+    const pointsBot = [];
+    for (let i = 0; i < 8; i++) {
+      pointsTop.push(rand(-8, 8));
+      pointsBot.push(rand(-8, 8));
+    }
+
+    game.pipes.push({
+      x: CFG.width + CFG.pipeWidth,
+      gapY, width: CFG.pipeWidth,
+      passed: false, rotating,
+      rot: 0,
+      rotSpeed: rotating ? rand(-0.012, 0.012) : 0,
+      zoneIdx: zoneAtSpawn,
+      pointsTop, pointsBot, seed,
+    });
+
+    // ★ Бонусы: щит 15%, замедление 5%
+    if (Math.random() < 0.20) {
+      const type = Math.random() < 0.75 ? 'shield' : 'slow';
+
+      const gapTop = gapY;
+      const gapBottom = gapY + CFG.pipeGap;
+      const margin2 = CFG.powerRadius * 1.7;
+
+      let powerY;
+      if (gapBottom - gapTop < margin2 * 2) powerY = (gapTop + gapBottom) / 2;
+      else powerY = rand(gapTop + margin2, gapBottom - margin2);
+
+      game.powers.push({
+        x: CFG.width + CFG.pipeWidth + 30,
+        y: powerY, r: CFG.powerRadius, type,
+        bob: Math.random() * Math.PI * 2,
+        spin: Math.random() * Math.PI * 2,
+      });
+    }
+  }
+
+  // ============ UPDATE ============
+  let lastTime = performance.now();
+
+  function update(dt) {
+    const s = dt / 16.666;
+    game.time += dt / 1000;
+
+    if (game.shake > 0) game.shake = Math.max(0, game.shake - dt * 0.05);
+    if (game.flashRed > 0) game.flashRed = Math.max(0, game.flashRed - dt * 0.002);
+
+    const slowFactor = game.slowmo > 0 ? 0.55 : 1;
+    const birdSpeedBoost = game.slowmo > 0 ? 1.25 : 1;
+
+    if (game.slowmo > 0) game.slowmo = Math.max(0, game.slowmo - dt / 1000);
+    // ★ Щит теперь не имеет таймера — он тратится при столкновениях или снимается после 3 труб
+
+    for (const st of game.stars) {
+      st.x -= st.speed * s * 0.4;
+      if (st.x < -5) { st.x = CFG.width + 5; st.y = Math.random() * (CFG.height - CFG.groundHeight); }
+    }
+    for (const n of game.nebulas) {
+      n.x -= n.speed * s * 0.4;
+      if (n.x + n.rx < 0) { n.x = CFG.width + n.rx; n.y = rand(50, CFG.height - 200); }
+    }
+    for (const c of game.clouds) {
+      c.x -= c.speed * s * 0.4;
+      if (c.x + c.r < 0) { c.x = CFG.width + c.r; c.y = rand(80, 400); }
+    }
+    if (game.milkyway) game.milkyway.phase += dt / 1000;
+    for (const m of game.moons) m.angle += m.speed * dt / 1000;
+    for (const a of game.asteroids) {
+      a.x -= a.speed * s * 0.6;
+      a.rot += a.rotSpeed * s;
+      if (a.x < -20) { a.x = CFG.width + 20; a.y = Math.random() * (CFG.height - CFG.groundHeight); a.r = rand(2, 8); }
+    }
+    for (const q of game.quasars) q.phase += q.pulseSpeed * dt / 1000;
+    for (const p of game.planets) {
+      p.phase += p.speed * dt / 60;
+      p.rotation += p.rotationSpeed * dt / 16.666;
+    }
+
+    updateZoneTransition(dt);
+
+    game.cometTimer -= dt / 1000;
+    if (game.cometTimer <= 0) {
+      game.cometTimer = rand(4, 9);
+      const fromLeft = Math.random() < 0.5;
+      const angle = fromLeft ? rand(0.1, 0.4) : Math.PI - rand(0.1, 0.4);
+      const speed = rand(4, 7);
+      game.comets.push({
+        x: fromLeft ? -20 : CFG.width + 20,
+        y: rand(0, 250),
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 1.5,
+      });
+    }
+
+    for (let i = game.particles.length - 1; i >= 0; i--) {
+      const p = game.particles[i];
+      p.x += p.vx * s; p.y += p.vy * s; p.vy += p.gravity * s;
+      p.life -= dt / 1000;
+      if (p.life <= 0) game.particles.splice(i, 1);
+    }
+
+    if (screen === Screen.DEAD) game.deadTimer += dt / 1000;
+    if (screen !== Screen.PLAY) return;
+
+    const bird = game.bird;
+    bird.vy += CFG.gravity * s * birdSpeedBoost;
+    bird.vy = Math.min(bird.vy, CFG.maxFallSpeed);
+    bird.y += bird.vy * s * birdSpeedBoost;
+    bird.angle = clamp(bird.vy / 9, -0.6, 1.3);
+
+    if (bird.y - CFG.birdRadius < 0) {
+      bird.y = CFG.birdRadius;
+      bird.vy = Math.max(bird.vy, 0);
+    }
+
+    const groundY = CFG.height - CFG.groundHeight;
+    if (bird.y + CFG.birdRadius >= groundY) {
+      bird.y = groundY - CFG.birdRadius;
+      if (bird.alive) hitObstacle(true, null);   // ★ земля — щит не помогает
+      return;
+    }
+
+    game.spawnTimer -= dt;
+    if (game.spawnTimer <= 0) {
+      spawnPipe();
+      game.spawnTimer = CFG.spawnInterval;
+    }
+
+    for (let i = game.pipes.length - 1; i >= 0; i--) {
+      const p = game.pipes[i];
+      p.x -= CFG.pipeSpeed * s * slowFactor;
+      if (p.rotating) p.rot += p.rotSpeed * s;
+
+      if (p.x + p.width < -20) { game.pipes.splice(i, 1); continue; }
+      if (bird.alive && collidePipe(p)) {
+        hitObstacle(false, p);   // ★ передаём саму трубу
+      }
+
+      if (!p.passed && p.x + p.width < bird.x - CFG.birdRadius) {
+        p.passed = true;
+        onScore();
+      }
+    }
+
+    for (let i = game.powers.length - 1; i >= 0; i--) {
+      const pw = game.powers[i];
+      pw.x -= CFG.pipeSpeed * s * slowFactor;
+      pw.bob += dt / 300;
+      if (pw.x < -50) { game.powers.splice(i, 1); continue; }
+      const dx = pw.x - bird.x;
+      const dy = pw.y - bird.y;
+      if (dx * dx + dy * dy < (pw.r + CFG.birdRadius) ** 2) {
+        applyPower(pw.type, pw.x, pw.y);
+        game.powers.splice(i, 1);
+      }
+    }
+
+    if (game.comboTimer > 0) {
+      game.comboTimer -= dt / 1000;
+      if (game.comboTimer <= 0) game.combo = 0;
+    }
+  }
+
+  function collidePipe(p) {
+    const b = game.bird;
+    let bx = b.x, by = b.y;
+    const br = CFG.birdRadius;
+
+    if (p.rotating) {
+      const cx = p.x + p.width / 2;
+      const cy = p.gapY + CFG.pipeGap / 2;
+      const angle = -Math.sin(p.rot) * CFG.pipeMaxAngle;
+      const dx = bx - cx, dy = by - cy;
+      const cos = Math.cos(angle), sin = Math.sin(angle);
+      bx = cx + dx * cos - dy * sin;
+      by = cy + dx * sin + dy * cos;
+    }
+
+    const topBottom = p.gapY;
+    const botTop = p.gapY + CFG.pipeGap;
+
+    if (bx + br < p.x || bx - br > p.x + p.width) return false;
+    if (by - br < topBottom) return true;
+    if (by + br > botTop) return true;
+    return false;
+  }
+
+  function onScore() {
+    game.score++;
+    game.combo++;
+    game.comboTimer = 2.5;
+    Sound.score();
+    spawnParticles(game.bird.x + 20, game.bird.y, 8, 'rgba(255,220,120,0.95)', {
+      speedMin: 1, speedMax: 3, life: 0.6, r: 2.5, gravity: 0.05
+    });
+
+    // ★ Если щит активен — считаем пройденные трубы
+    if (game.shield > 0) {
+      game.shieldPipeCounter++;
+
+      if (game.shieldPipeCounter >= CFG.shieldDuration) {
+        // Прошло 3 трубы без столкновения — щит исчезает
+        game.shield = 0;
+        game.shieldPipeCounter = 0;
+        showCombo('🛡 ЩИТ ИСЧЕЗ');
+        Sound.hit();
+        spawnParticles(game.bird.x, game.bird.y, 15, 'rgba(140,220,255,0.9)', {
+          speedMin: 2, speedMax: 5, life: 0.7, r: 2.5
+        });
+      }
+    }
+
+    if (game.combo >= 3) showCombo(`COMBO x${game.combo}!`);
+    if (game.score > game.best) {
+      game.best = game.score;
+      Storage.setBest(game.best);
+    }
+    updateHUD();
+  }
+
+  function applyPower(type, x, y) {
+    Sound.power();
+    const colors = { shield: '#5ce1ff', slow: '#c084fc' };
+    spawnParticles(x, y, 22, colors[type], { speedMin: 2, speedMax: 5, life: 0.9, r: 3 });
+
+    if (type === 'shield') {
+      game.shield = 1;                    // ★ защита на 1 удар
+      game.shieldPipeCounter = 0;         // ★ счётчик труб с нуля
+      showCombo('🛡 ЩИТ! (3 трубы)');
+    } else if (type === 'slow') {
+      game.slowmo = 5;
+      showCombo('⏳ ЗАМЕДЛЕНИЕ!');
+    }
+    updateHUD();
+  }
+
+  function hitObstacle(isGround, pipe) {
+    const bird = game.bird;
+
+    // ★ Смерть при падении на землю — щит НЕ спасает
+    if (isGround) {
+      die();
+      return;
+    }
+
+    // ★ Щит работает только против труб, защищает от 1 удара
+    if (game.shield > 0 && pipe) {
+      // Разрушаем трубу и забираем щит
+      game.shield = 0;
+      game.shieldPipeCounter = 0;
+      game.shake = 14;
+      Sound.hit();
+
+      // ★ Осколки трубы разлетаются
+      const cx = pipe.x + pipe.width / 2;
+      spawnParticles(cx, bird.y - 30, 12, 'rgba(180,220,255,0.95)', {
+        angle: -Math.PI / 2 + Math.PI * 0.5 * Math.random(),
+        speedMin: 2, speedMax: 6, life: 1, r: 3, gravity: 0.2
+      });
+      spawnParticles(cx, bird.y + 30, 12, 'rgba(180,220,255,0.95)', {
+        angle: Math.PI / 2 + Math.PI * 0.5 * Math.random(),
+        speedMin: 2, speedMax: 6, life: 1, r: 3, gravity: 0.2
+      });
+      spawnParticles(cx, bird.y, 20, 'rgba(255,255,255,0.95)', {
+        speedMin: 3, speedMax: 8, life: 0.8, r: 3, gravity: 0.15
+      });
+      spawnParticles(cx, bird.y, 15, 'rgba(92,225,255,0.95)', {
+        speedMin: 4, speedMax: 9, life: 0.6, r: 2, gravity: 0
+      });
+
+      // ★ Убираем трубу из массива
+      const idx = game.pipes.indexOf(pipe);
+      if (idx !== -1) game.pipes.splice(idx, 1);
+
+      // ★ Небольшой отскок вверх
+      bird.vy = Math.min(bird.vy, -3);
+
+      showCombo('🛡 ЩИТ РАЗБИТ!');
+      return;
+    }
+
+    // Смерть — ни щита, ни трубы
+    die();
+  }
+
+  function die() {
+    const bird = game.bird;
+    bird.alive = false;
+    screen = Screen.DEAD;
+    game.deadTimer = 0;
+    game.shake = 16;
+    game.flashRed = 0.8;
+    Sound.die();
+
+    spawnParticles(bird.x, bird.y, 40, 'rgba(255,180,60,1)', { speedMin: 3, speedMax: 9, life: 1.2, r: 4 });
+    spawnParticles(bird.x, bird.y, 20, 'rgba(255,255,255,1)', { speedMin: 2, speedMax: 6, life: 0.8, r: 2.5 });
+    spawnParticles(bird.x, bird.y, 15, 'rgba(120,220,255,1)', { speedMin: 1, speedMax: 5, life: 1.5, r: 3 });
+
+    if (!game.saved) {
+      game.saved = true;
+      Storage.addAttempt(game.score);
+      Storage.setBest(game.score);
+      game.best = Storage.getBest();
+      Storage.checkUnlocks(game.best);
+      updateHUD();
+    }
+  }
+
+  // ============ ОТРИСОВКА ============
+  function draw() {
+    const t = game.time;
+    const dayT = (Math.sin((t / CFG.dayDuration) * Math.PI * 2) + 1) / 2;
+
+    ctx.save();
+    if (game.shake > 0) {
+      const sx = (Math.random() - 0.5) * game.shake;
+      const sy = (Math.random() - 0.5) * game.shake;
+      ctx.translate(sx, sy);
+    }
+
+    drawSky(dayT);
+    drawMilkyWay(dayT);
+    drawNebulas(dayT);
+    drawAuroras(dayT);
+    drawStars(dayT);
+    drawQuasars(dayT);
+    drawAsteroids(dayT);
+    drawPlanets(dayT);
+    drawMoons(dayT);
+    drawComets(dayT);
+    drawClouds(dayT);
+
+    if (screen === Screen.PLAY || screen === Screen.DEAD) {
+      drawPipes(dayT);
+      drawPowers();
+    }
+
+    drawParticles();
+
+    if (screen === Screen.PLAY || screen === Screen.DEAD) {
+      drawGround(dayT);
+      drawShip(dayT);
+    } else {
+      drawGround(dayT);
+    }
+
+    if (game.flashRed > 0 && screen === Screen.PLAY) {
+      ctx.fillStyle = `rgba(255,40,40,${game.flashRed * 0.5})`;
+      ctx.fillRect(0, 0, CFG.width, CFG.height);
+    }
+    ctx.restore();
+
+    clearButtons();
+
+    if (screen === Screen.MAIN_MENU) drawMainMenu();
+    else if (screen === Screen.DEAD) drawGameOver();
+    else if (screen === Screen.LEADERBOARD) drawLeaderboard();
+    else if (screen === Screen.ATTEMPTS) drawAttempts();
+    else if (screen === Screen.EXIT) drawExitScreen();
+    else if (screen === Screen.SKINS) drawSkins();
+
+    for (const btn of currentButtons) drawButton(btn);
+  }
+
+  function drawSky(dayT) {
+    const z = ZONES[game.currentZone];
+    const z2 = ZONES[game.targetZone];
+    const t = game.zoneTransition;
+
+    const zoneTop = hslToRgb(z.hue, 50, 5);
+    const zoneMid = hslToRgb(z.hue, 45, 12);
+    const zoneBot = hslToRgb(z.hue, 55, 20);
+    const zoneTop2 = hslToRgb(z2.hue, 50, 5);
+    const zoneMid2 = hslToRgb(z2.hue, 45, 12);
+    const zoneBot2 = hslToRgb(z2.hue, 55, 20);
+
+    const top = mixRgb(zoneTop, zoneTop2, t);
+    const mid = mixRgb(zoneMid, zoneMid2, t);
+    const bot = mixRgb(zoneBot, zoneBot2, t);
+
+    const dayBoost = dayT * 20;
+    const topC = `rgb(${Math.min(255, top.r + dayBoost)}, ${Math.min(255, top.g + dayBoost)}, ${Math.min(255, top.b + dayBoost)})`;
+    const midC = `rgb(${Math.min(255, mid.r + dayBoost)}, ${Math.min(255, mid.g + dayBoost)}, ${Math.min(255, mid.b + dayBoost)})`;
+    const botC = `rgb(${Math.min(255, bot.r + dayBoost)}, ${Math.min(255, bot.g + dayBoost)}, ${Math.min(255, bot.b + dayBoost)})`;
+
+    const g = ctx.createLinearGradient(0, 0, 0, CFG.height);
+    g.addColorStop(0, topC);
+    g.addColorStop(0.5, midC);
+    g.addColorStop(1, botC);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, CFG.width, CFG.height);
+  }
+
+  function drawMilkyWay(dayT) {
+    const targetAlpha = (game.currentZone >= 7 || game.targetZone >= 7) ? 0.6 : 0;
+    game.milkyway.alpha = lerp(game.milkyway.alpha, targetAlpha, 0.03);
+    if (game.milkyway.alpha < 0.02) return;
+
+    ctx.save();
+    ctx.globalAlpha = game.milkyway.alpha * (0.6 + (1 - dayT) * 0.4);
+    ctx.translate(CFG.width / 2, CFG.height / 2);
+    ctx.rotate(game.milkyway.angle);
+
+    const w = CFG.width * 1.8;
+    const h = game.milkyway.thickness;
+    const g = ctx.createLinearGradient(0, -h, 0, h);
+    g.addColorStop(0, 'rgba(200,180,255,0)');
+    g.addColorStop(0.3, 'rgba(200,180,255,0.25)');
+    g.addColorStop(0.5, 'rgba(255,220,255,0.55)');
+    g.addColorStop(0.7, 'rgba(200,180,255,0.25)');
+    g.addColorStop(1, 'rgba(200,180,255,0)');
+
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    for (let x = -w / 2; x <= w / 2; x += 10) {
+      const wave = Math.sin(x * 0.008 + game.milkyway.phase * 0.5) * h * 0.15;
+      if (x === -w / 2) ctx.moveTo(x, -h + wave);
+      else ctx.lineTo(x, -h + wave);
+    }
+    for (let x = w / 2; x >= -w / 2; x -= 10) {
+      const wave = Math.sin(x * 0.008 + game.milkyway.phase * 0.5) * h * 0.15;
+      ctx.lineTo(x, h + wave);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    for (let i = 0; i < 50; i++) {
+      const px = rand(-w / 2, w / 2), py = rand(-h * 0.85, h * 0.85);
+      ctx.fillStyle = `rgba(255,255,255,${rand(0.15, 0.6)})`;
+      ctx.beginPath();
+      ctx.arc(px, py, rand(0.4, 1.3), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  function drawNebulas(dayT) {
+    const alpha = 0.55 + (1 - dayT) * 0.45;
+    for (const n of game.nebulas) {
+      ctx.save();
+      ctx.globalAlpha = n.alpha * alpha;
+      ctx.translate(n.x, n.y);
+      ctx.rotate(n.rot);
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(n.rx, n.ry));
+      g.addColorStop(0, n.color1 + 'aa');
+      g.addColorStop(0.4, n.color1 + '55');
+      g.addColorStop(1, n.color2 + '00');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, n.rx, n.ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawAuroras(dayT) {
+    const alpha = 0.4 + (1 - dayT) * 0.6;
+    for (const a of game.auroras) {
+      a.phase += a.speed * 0.016;
+      ctx.save();
+      ctx.globalAlpha = a.alpha * alpha;
+      ctx.beginPath();
+      ctx.moveTo(0, a.yBase);
+      for (let x = 0; x <= CFG.width; x += 8) {
+        const y = a.yBase + Math.sin(x * a.frequency + a.phase) * a.amplitude
+                  + Math.sin(x * a.frequency * 2.3 + a.phase * 1.7) * a.amplitude * 0.4;
+        ctx.lineTo(x, y);
+      }
+      ctx.lineTo(CFG.width, a.yBase + a.width * 2);
+      for (let x = CFG.width; x >= 0; x -= 8) {
+        const y = a.yBase + a.width + Math.sin(x * a.frequency + a.phase) * a.amplitude
+                  + Math.sin(x * a.frequency * 2.3 + a.phase * 1.7) * a.amplitude * 0.4;
+        ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      const g = ctx.createLinearGradient(0, a.yBase - a.amplitude, 0, a.yBase + a.width * 2);
+      g.addColorStop(0, `hsla(${a.hue}, 90%, 70%, 0)`);
+      g.addColorStop(0.4, `hsla(${a.hue}, 90%, 65%, 0.9)`);
+      g.addColorStop(0.7, `hsla(${a.hue + 30}, 85%, 60%, 0.6)`);
+      g.addColorStop(1, `hsla(${a.hue + 60}, 80%, 55%, 0)`);
+      ctx.fillStyle = g;
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawStars(dayT) {
+    const alpha = 0.4 + (1 - dayT) * 0.6;
+    for (const st of game.stars) {
+      st.twinkle += st.twinkleSpeed * 0.016;
+      const tw = 0.75 + Math.sin(st.twinkle) * 0.25;
+      ctx.globalAlpha = st.alpha * alpha * tw;
+      ctx.fillStyle = st.color;
+      if (st.r > 1.3) { ctx.shadowColor = st.color; ctx.shadowBlur = 6; }
+      ctx.beginPath();
+      ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawQuasars(dayT) {
+    if (game.currentZone < 7) return;
+    const alpha = 0.9 + (1 - dayT) * 0.1;
+    for (const q of game.quasars) {
+      const pulse = 0.6 + Math.sin(q.phase) * 0.4;
+      const R = q.r * (0.6 + pulse * 0.8);
+      const g = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, R * 5);
+      g.addColorStop(0, `hsla(${q.hue}, 100%, 95%, ${alpha})`);
+      g.addColorStop(0.25, `hsla(${q.hue}, 100%, 75%, ${alpha * 0.7})`);
+      g.addColorStop(1, `hsla(${q.hue}, 100%, 60%, 0)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(q.x, q.y, R * 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = `hsl(${q.hue}, 100%, 80%)`;
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.arc(q.x, q.y, R * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  function drawAsteroids(dayT) {
+    if (game.currentZone !== 2) return;
+    const alpha = 0.8 + (1 - dayT) * 0.2;
+    for (const a of game.asteroids) {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(a.x, a.y);
+      ctx.rotate(a.rot);
+      ctx.fillStyle = `hsl(${35 + Math.sin(a.x * 0.01) * 10}, 30%, ${45 + Math.sin(a.y * 0.01) * 10}%)`;
+      ctx.beginPath();
+      for (let i = 0; i < a.shape.length; i++) {
+        const ang = (i / a.shape.length) * Math.PI * 2;
+        const r = a.r * a.shape[i];
+        const x = Math.cos(ang) * r, y = Math.sin(ang) * r;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.beginPath();
+      ctx.arc(a.r * 0.3, a.r * 0.3, a.r * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawPlanets(dayT) {
+    const alpha = 0.85 + (1 - dayT) * 0.15;
+    for (let i = 0; i < game.planets.length; i++) {
+      const p = game.planets[i];
+      const py = p.y + Math.sin(p.phase) * 10;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      const glow = ctx.createRadialGradient(p.x, py, p.r * 0.8, p.x, py, p.r * 2.6);
+      glow.addColorStop(0, `hsla(${p.hue}, 80%, 60%, 0.35)`);
+      glow.addColorStop(1, `hsla(${p.hue}, 80%, 60%, 0)`);
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(p.x, py, p.r * 2.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (p.hasRing) {
+        ctx.save();
+        ctx.translate(p.x, py);
+        ctx.rotate(p.ringAngle);
+        ctx.scale(1, 0.28);
+        ctx.beginPath();
+        ctx.arc(0, 0, p.r * 2, Math.PI, Math.PI * 2);
+        ctx.strokeStyle = `hsla(${p.hue + 20}, 70%, 70%, 0.55)`;
+        ctx.lineWidth = p.r * 0.3;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(p.x, py, p.r, 0, Math.PI * 2);
+      ctx.clip();
+      drawPlanetSurface(ctx, p.x, py, p.r, p.zoneIdx, p.rotation, p.hue, p.isMoon);
+      ctx.restore();
+
+      const rimGrad = ctx.createRadialGradient(p.x - p.r * 0.3, py - p.r * 0.3, p.r * 0.15, p.x, py, p.r);
+      rimGrad.addColorStop(0, 'rgba(255,255,255,0.18)');
+      rimGrad.addColorStop(0.65, 'rgba(0,0,0,0)');
+      rimGrad.addColorStop(1, 'rgba(0,0,0,0.4)');
+      ctx.fillStyle = rimGrad;
+      ctx.beginPath();
+      ctx.arc(p.x, py, p.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      const specGrad = ctx.createRadialGradient(p.x - p.r * 0.4, py - p.r * 0.4, 0, p.x - p.r * 0.4, py - p.r * 0.4, p.r * 0.8);
+      specGrad.addColorStop(0, 'rgba(255,255,255,0.32)');
+      specGrad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = specGrad;
+      ctx.beginPath();
+      ctx.arc(p.x - p.r * 0.4, py - p.r * 0.4, p.r * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (p.hasRing) {
+        ctx.save();
+        ctx.translate(p.x, py);
+        ctx.rotate(p.ringAngle);
+        ctx.scale(1, 0.28);
+        ctx.beginPath();
+        ctx.arc(0, 0, p.r * 2, 0, Math.PI);
+        ctx.strokeStyle = `hsla(${p.hue + 20}, 75%, 78%, 0.85)`;
+        ctx.lineWidth = p.r * 0.3;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(0, 0, p.r * 2.15, 0, Math.PI);
+        ctx.strokeStyle = `hsla(${p.hue + 20}, 60%, 60%, 0.5)`;
+        ctx.lineWidth = p.r * 0.08;
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawPlanetSurface(ctx, cx, cy, r, zoneIdx, rotation, hue, isMoon) {
+    const baseGrad = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.1, cx, cy, r);
+    baseGrad.addColorStop(0, `hsl(${hue}, 70%, 60%)`);
+    baseGrad.addColorStop(0.7, `hsl(${hue}, 65%, 40%)`);
+    baseGrad.addColorStop(1, `hsl(${hue}, 60%, 25%)`);
+    ctx.fillStyle = baseGrad;
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+
+    if (isMoon) { drawMoonTexture(ctx, cx, cy, r, rotation); return; }
+
+    switch (zoneIdx) {
+      case 0: drawEarth(ctx, cx, cy, r, rotation); break;
+      case 1: drawMars(ctx, cx, cy, r, rotation); break;
+      case 2: drawAsteroid(ctx, cx, cy, r, rotation); break;
+      case 3: drawJupiter(ctx, cx, cy, r, rotation, hue); break;
+      case 4: drawSaturnBody(ctx, cx, cy, r, rotation, hue); break;
+      case 5: drawUranus(ctx, cx, cy, r, rotation); break;
+      case 6: drawNeptune(ctx, cx, cy, r, rotation); break;
+      case 7: drawMilkyBody(ctx, cx, cy, r, rotation); break;
+      case 8: drawAndromedaBody(ctx, cx, cy, r, rotation); break;
+      default: drawDeepSpace(ctx, cx, cy, r, rotation); break;
+    }
+  }
+
+  function drawEarth(ctx, cx, cy, r, rot) {
+    ctx.fillStyle = '#2a6ac8';
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    const oceanGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    oceanGrad.addColorStop(0, 'rgba(60,140,220,0.4)');
+    oceanGrad.addColorStop(1, 'rgba(10,30,90,0.6)');
+    ctx.fillStyle = oceanGrad;
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    const conts = [
+      { x: -0.5, y: -0.2, w: 0.4, h: 0.3 }, { x: 0.3, y: 0.1, w: 0.5, h: 0.4 },
+      { x: -0.2, y: 0.4, w: 0.35, h: 0.25 }, { x: 0.5, y: -0.4, w: 0.3, h: 0.3 },
+    ];
+    for (const c of conts) {
+      const wobble = Math.sin(rot * 2 + c.x * 5) * 0.05;
+      ctx.fillStyle = `hsl(${100 + Math.sin(rot + c.x) * 20}, 55%, ${35 + Math.sin(rot * 1.5 + c.y) * 10}%)`;
+      ctx.beginPath();
+      ctx.ellipse(cx + (c.x + wobble) * r, cy + c.y * r, c.w * r, c.h * r, c.x * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    for (let i = 0; i < 5; i++) {
+      const cloudPhase = rot * 0.7 + i * 1.3;
+      const cx2 = cx + Math.cos(cloudPhase) * r * 0.6;
+      const cy2 = cy + Math.sin(i * 0.9) * r * 0.5;
+      ctx.fillStyle = `rgba(255,255,255,${0.2 + Math.sin(cloudPhase * 2) * 0.1})`;
+      ctx.beginPath();
+      ctx.ellipse(cx2, cy2, r * 0.35, r * 0.08, i * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawMars(ctx, cx, cy, r, rot) {
+    ctx.fillStyle = '#c65a2a';
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    ctx.fillStyle = 'rgba(255,240,220,0.85)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - r * 0.85, r * 0.35, r * 0.15, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + r * 0.85, r * 0.3, r * 0.12, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const spots = [
+      { x: -0.3, y: 0, w: 0.35, h: 0.25, c: '#7a2a10' },
+      { x: 0.4, y: -0.3, w: 0.25, h: 0.2, c: '#9a3a18' },
+      { x: 0.1, y: 0.4, w: 0.3, h: 0.2, c: '#8a3015' },
+    ];
+    for (const s of spots) {
+      const sx = cx + Math.cos(rot + s.x * 3) * r * 0.6;
+      const sy = cy + s.y * r;
+      ctx.fillStyle = s.c;
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, s.w * r, s.h * r, rot * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawAsteroid(ctx, cx, cy, r, rot) {
+    ctx.fillStyle = '#6a5a4a';
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    const craters = [
+      { x: -0.3, y: -0.2, r: 0.25 }, { x: 0.2, y: 0.3, r: 0.3 },
+      { x: 0.4, y: -0.4, r: 0.15 }, { x: -0.5, y: 0.3, r: 0.18 },
+    ];
+    for (const c of craters) {
+      const px = cx + (c.x * Math.cos(rot) + c.y * Math.sin(rot)) * r;
+      const py = cy + (-c.x * Math.sin(rot) + c.y * Math.cos(rot)) * r;
+      ctx.fillStyle = '#3a2a1a';
+      ctx.beginPath();
+      ctx.arc(px, py, c.r * r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawJupiter(ctx, cx, cy, r, rot, hue) {
+    for (let i = -4; i <= 4; i++) {
+      const shade = 55 + Math.sin(i * 1.3) * 15;
+      ctx.fillStyle = `hsl(${hue + (i % 2 ? 10 : -5)}, 65%, ${shade}%)`;
+      const y = cy + i * r * 0.25 + Math.sin(rot + i * 0.5) * r * 0.02;
+      ctx.fillRect(cx - r, y, r * 2, r * 0.24);
+    }
+    const spotX = cx + Math.sin(rot) * r * 0.3;
+    const spotY = cy + r * 0.15;
+    ctx.fillStyle = '#c84a30';
+    ctx.beginPath();
+    ctx.ellipse(spotX, spotY, r * 0.28, r * 0.18, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawSaturnBody(ctx, cx, cy, r, rot, hue) {
+    for (let i = -3; i <= 3; i++) {
+      const shade = 65 + Math.sin(i * 1.5) * 10;
+      ctx.fillStyle = `hsl(${hue + (i % 2 ? 5 : -5)}, 60%, ${shade}%)`;
+      const y = cy + i * r * 0.3 + Math.sin(rot + i) * r * 0.02;
+      ctx.fillRect(cx - r, y, r * 2, r * 0.28);
+    }
+  }
+
+  function drawUranus(ctx, cx, cy, r, rot) {
+    const g = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, 0, cx, cy, r);
+    g.addColorStop(0, '#c0f0f8');
+    g.addColorStop(0.7, '#80d0e0');
+    g.addColorStop(1, '#4090a8');
+    ctx.fillStyle = g;
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+  }
+
+  function drawNeptune(ctx, cx, cy, r, rot) {
+    const g = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, 0, cx, cy, r);
+    g.addColorStop(0, '#80a8ff');
+    g.addColorStop(0.6, '#3060c8');
+    g.addColorStop(1, '#1030a0');
+    ctx.fillStyle = g;
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    const spotX = cx + Math.cos(rot) * r * 0.4;
+    const spotY = cy + Math.sin(rot * 0.7) * r * 0.3;
+    ctx.fillStyle = 'rgba(10,30,90,0.7)';
+    ctx.beginPath();
+    ctx.ellipse(spotX, spotY, r * 0.35, r * 0.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawMilkyBody(ctx, cx, cy, r, rot) {
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.3, '#e0d0ff');
+    g.addColorStop(0.7, '#9070d0');
+    g.addColorStop(1, '#402080');
+    ctx.fillStyle = g;
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    for (let i = 0; i < 25; i++) {
+      const angle = rot + i * 0.5;
+      const dist = (i % 5) / 5 * r * 0.9;
+      const x = cx + Math.cos(angle) * dist;
+      const y = cy + Math.sin(angle) * dist;
+      ctx.fillStyle = `rgba(255,255,255,${0.3 + Math.sin(rot * 3 + i) * 0.3})`;
+      ctx.beginPath();
+      ctx.arc(x, y, 0.8 + Math.sin(i) * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawAndromedaBody(ctx, cx, cy, r, rot) {
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    g.addColorStop(0, '#fff0ff');
+    g.addColorStop(0.4, '#ffa8e0');
+    g.addColorStop(0.8, '#c060a0');
+    g.addColorStop(1, '#602040');
+    ctx.fillStyle = g;
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    ctx.strokeStyle = 'rgba(255,200,240,0.5)';
+    for (let arm = 0; arm < 2; arm++) {
+      ctx.beginPath();
+      for (let t = 0; t < Math.PI * 3; t += 0.15) {
+        const dist = (t / (Math.PI * 3)) * r * 0.9;
+        const a = t + rot + arm * Math.PI;
+        const x = cx + Math.cos(a) * dist;
+        const y = cy + Math.sin(a) * dist;
+        if (t === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  }
+
+  function drawDeepSpace(ctx, cx, cy, r, rot) {
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    g.addColorStop(0, '#203060');
+    g.addColorStop(0.6, '#101840');
+    g.addColorStop(1, '#050820');
+    ctx.fillStyle = g;
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    for (let i = 0; i < 30; i++) {
+      const x = cx + Math.sin(i * 3.7 + rot) * r * 0.9;
+      const y = cy + Math.cos(i * 2.3 + rot * 0.5) * r * 0.9;
+      ctx.fillStyle = `rgba(255,255,255,${0.4 + Math.sin(rot * 2 + i) * 0.3})`;
+      ctx.beginPath();
+      ctx.arc(x, y, 0.6 + (i % 3) * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawMoonTexture(ctx, cx, cy, r, rot) {
+    const g = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, 0, cx, cy, r);
+    g.addColorStop(0, '#e8e8f0');
+    g.addColorStop(0.6, '#b0b0b8');
+    g.addColorStop(1, '#606068');
+    ctx.fillStyle = g;
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    const craters = [
+      { x: -0.4, y: -0.3, r: 0.2 }, { x: 0.3, y: 0.1, r: 0.28 },
+      { x: -0.2, y: 0.4, r: 0.15 }, { x: 0.5, y: -0.3, r: 0.18 },
+    ];
+    for (const c of craters) {
+      const px = cx + (c.x * Math.cos(rot) - c.y * Math.sin(rot)) * r;
+      const py = cy + (c.x * Math.sin(rot) + c.y * Math.cos(rot)) * r;
+      ctx.fillStyle = '#505058';
+      ctx.beginPath();
+      ctx.arc(px, py, c.r * r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawMoons(dayT) {
+    if (game.currentZone > 1) return;
+    const alpha = 0.9 + (1 - dayT) * 0.1;
+    const parent = game.planets[0];
+    const px = parent.x;
+    const py = parent.y + Math.sin(parent.phase) * 10;
+    for (const m of game.moons) {
+      const mx = px + Math.cos(m.angle) * m.radius;
+      const my = py + Math.sin(m.angle) * m.radius * 0.35;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      const baseGrad = ctx.createRadialGradient(mx - m.size * 0.3, my - m.size * 0.3, 0, mx, my, m.size);
+      baseGrad.addColorStop(0, '#e8e8f0');
+      baseGrad.addColorStop(0.7, '#b0b0b8');
+      baseGrad.addColorStop(1, '#505058');
+      ctx.fillStyle = baseGrad;
+      ctx.beginPath();
+      ctx.arc(mx, my, m.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawComets(dayT) {
+    const alpha = 0.8 + (1 - dayT) * 0.2;
+    for (let i = game.comets.length - 1; i >= 0; i--) {
+      const c = game.comets[i];
+      c.x += c.vx; c.y += c.vy; c.life -= 0.008;
+      if (c.life <= 0 || c.x < -200 || c.x > CFG.width + 200 || c.y > CFG.height) {
+        game.comets.splice(i, 1);
+        continue;
+      }
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, c.life * 2) * alpha;
+      const tailLen = 80;
+      const tailGrad = ctx.createLinearGradient(c.x, c.y, c.x - c.vx * tailLen * 0.5, c.y - c.vy * tailLen * 0.5);
+      tailGrad.addColorStop(0, 'rgba(255,255,255,0.9)');
+      tailGrad.addColorStop(0.3, 'rgba(180,220,255,0.6)');
+      tailGrad.addColorStop(1, 'rgba(180,220,255,0)');
+      ctx.strokeStyle = tailGrad;
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(c.x, c.y);
+      ctx.lineTo(c.x - c.vx * tailLen * 0.5, c.y - c.vy * tailLen * 0.5);
+      ctx.stroke();
+      ctx.shadowColor = '#aaddff';
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawClouds(dayT) {
+    const alpha = 0.4 + dayT * 0.6;
+    for (const c of game.clouds) {
+      ctx.save();
+      ctx.globalAlpha = c.alpha * alpha;
+      const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, c.r);
+      g.addColorStop(0, `hsla(${c.hue}, 70%, 70%, 0.8)`);
+      g.addColorStop(0.5, `hsla(${c.hue}, 70%, 60%, 0.3)`);
+      g.addColorStop(1, `hsla(${c.hue}, 70%, 50%, 0)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawGround(dayT) {
+    const z = ZONES[game.currentZone];
+    const z2 = ZONES[game.targetZone];
+    const t = game.zoneTransition;
+    const fromTop = hslToRgb(z.hue, 45, 25);
+    const fromBot = hslToRgb(z.hue, 40, 10);
+    const toTop = hslToRgb(z2.hue, 45, 25);
+    const toBot = hslToRgb(z2.hue, 40, 10);
+    const top = mixRgb(fromTop, toTop, t);
+    const bot = mixRgb(fromBot, toBot, t);
+    const y = CFG.height - CFG.groundHeight;
+    const g = ctx.createLinearGradient(0, y, 0, CFG.height);
+    g.addColorStop(0, `rgb(${Math.round(top.r)},${Math.round(top.g)},${Math.round(top.b)})`);
+    g.addColorStop(1, `rgb(${Math.round(bot.r)},${Math.round(bot.g)},${Math.round(bot.b)})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, y, CFG.width, CFG.groundHeight);
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    const offset = (game.time * 60 * CFG.pipeSpeed) % 20;
+    for (let x = -offset; x < CFG.width; x += 20) {
+      ctx.fillRect(x, y, 10, 4);
+    }
+  }
+
+  // ═══════════════ ТРУБЫ ПО ЛОКАЦИЯМ ═══════════════
+  function drawPipes(dayT) {
+    const dayBright = 0.5 + dayT * 0.3;
+    for (const p of game.pipes) {
+      const zone = ZONES[p.zoneIdx];
+
+      ctx.save();
+      if (p.rotating) {
+        const cx = p.x + p.width / 2;
+        const cy = p.gapY + CFG.pipeGap / 2;
+        const angle = Math.sin(p.rot) * CFG.pipeMaxAngle;
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+        ctx.translate(-cx, -cy);
+      }
+
+      const topH = p.gapY;
+      const botY = p.gapY + CFG.pipeGap;
+      const botH = CFG.height - CFG.groundHeight - botY;
+
+      drawPipeByZone(zone, p, p.x, 0, p.width, topH, true, dayBright);
+      drawPipeByZone(zone, p, p.x, botY, p.width, botH, false, dayBright);
+
+      ctx.restore();
+    }
+  }
+
+  function drawPipeByZone(zone, pipe, x, y, w, h, isTop, bright) {
+    if (h <= 0) return;
+    switch (zone.type) {
+      case 'earth':     drawEarthDebris(pipe, x, y, w, h, isTop, bright); break;
+      case 'mars':      drawMarsRock(pipe, x, y, w, h, isTop, bright); break;
+      case 'asteroids': drawAsteroidPile(pipe, x, y, w, h, isTop, bright); break;
+      case 'jupiter':   drawGasVortex(pipe, x, y, w, h, isTop, bright); break;
+      case 'saturn':    drawIceSpike(pipe, x, y, w, h, isTop, bright); break;
+      case 'uranus':    drawCrystalPillar(pipe, x, y, w, h, isTop, bright); break;
+      case 'neptune':   drawWaterJet(pipe, x, y, w, h, isTop, bright); break;
+      case 'milkyway':  drawStarSwirl(pipe, x, y, w, h, isTop, bright); break;
+      case 'andromeda': drawNebulaTrail(pipe, x, y, w, h, isTop, bright); break;
+      default:          drawQuantumAnomaly(pipe, x, y, w, h, isTop, bright); break;
+    }
+  }
+
+  function drawEarthDebris(pipe, x, y, w, h, isTop, bright) {
+    const grad = ctx.createLinearGradient(x, 0, x + w, 0);
+    grad.addColorStop(0, `hsl(210, 15%, ${Math.round(18 * bright + 6)}%)`);
+    grad.addColorStop(0.2, `hsl(210, 20%, ${Math.round(40 * bright + 14)}%)`);
+    grad.addColorStop(0.5, `hsl(210, 25%, ${Math.round(60 * bright + 20)}%)`);
+    grad.addColorStop(0.8, `hsl(210, 20%, ${Math.round(42 * bright + 14)}%)`);
+    grad.addColorStop(1, `hsl(210, 15%, ${Math.round(20 * bright + 8)}%)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, y, w, h);
+
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = 1;
+    for (let py = y; py < y + h; py += 40) {
+      ctx.beginPath();
+      ctx.moveTo(x, py);
+      ctx.lineTo(x + w, py);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    for (let py = y + 10; py < y + h - 10; py += 20) {
+      ctx.beginPath();
+      ctx.arc(x + 6, py, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x + w - 6, py, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const edgeY = isTop ? y + h - 6 : y;
+    const edgeGrad = ctx.createLinearGradient(x, edgeY, x, edgeY + 6);
+    edgeGrad.addColorStop(0, 'rgba(140, 220, 255, 0.9)');
+    edgeGrad.addColorStop(1, 'rgba(140, 220, 255, 0)');
+    ctx.fillStyle = edgeGrad;
+    if (isTop) ctx.fillRect(x, y + h - 6, w, 6);
+    else ctx.fillRect(x, y, w, 6);
+
+    ctx.strokeStyle = 'rgba(140, 200, 255, 0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  }
+
+  function drawMarsRock(pipe, x, y, w, h, isTop, bright) {
+    ctx.fillStyle = `hsl(15, 55%, ${Math.round(35 * bright + 10)}%)`;
+    ctx.beginPath();
+    const points = isTop ? pipe.pointsTop : pipe.pointsBot;
+    ctx.moveTo(x, y);
+    for (let i = 0; i <= points.length; i++) {
+      const progress = i / points.length;
+      const py = y + progress * h;
+      const offset = i < points.length ? points[i] : 0;
+      ctx.lineTo(x + offset, py);
+    }
+    for (let i = points.length - 1; i >= 0; i--) {
+      const progress = i / points.length;
+      const py = y + progress * h;
+      ctx.lineTo(x + w + points[i] * 0.5, py);
+    }
+    ctx.lineTo(x + w, y + h);
+    ctx.lineTo(x + w, y);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(40, 10, 5, 0.7)';
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 5; i++) {
+      const cy = y + (i + 1) * (h / 6);
+      ctx.beginPath();
+      ctx.moveTo(x + 5, cy + Math.sin(pipe.seed + i) * 5);
+      ctx.lineTo(x + w * 0.3, cy + Math.sin(pipe.seed + i * 1.7) * 8);
+      ctx.lineTo(x + w - 5, cy + Math.sin(pipe.seed + i * 3.1) * 6);
+      ctx.stroke();
+    }
+
+    const edgeY = isTop ? y + h - 4 : y;
+    ctx.fillStyle = 'rgba(255, 120, 60, 0.8)';
+    if (isTop) ctx.fillRect(x, y + h - 4, w, 4);
+    else ctx.fillRect(x, y, w, 4);
+  }
+
+  function drawAsteroidPile(pipe, x, y, w, h, isTop, bright) {
+    ctx.fillStyle = `hsl(30, 25%, ${Math.round(38 * bright + 12)}%)`;
+    ctx.beginPath();
+    const points = isTop ? pipe.pointsTop : pipe.pointsBot;
+    ctx.moveTo(x, y);
+    for (let i = 0; i <= points.length; i++) {
+      const progress = i / points.length;
+      const py = y + progress * h;
+      const offset = i < points.length ? points[i] : 0;
+      ctx.lineTo(x + offset, py);
+    }
+    for (let i = points.length - 1; i >= 0; i--) {
+      const progress = i / points.length;
+      const py = y + progress * h;
+      ctx.lineTo(x + w + points[i] * 0.6, py);
+    }
+    ctx.lineTo(x + w, y + h);
+    ctx.lineTo(x + w, y);
+    ctx.closePath();
+    ctx.fill();
+
+    for (let i = 0; i < 6; i++) {
+      const px = x + 8 + ((pipe.seed * (i + 1) * 13) % (w - 16));
+      const py = y + 20 + ((pipe.seed * (i + 1) * 17) % (h - 40));
+      const cr = 3 + (i % 3);
+      ctx.fillStyle = 'rgba(20, 15, 10, 0.7)';
+      ctx.beginPath();
+      ctx.arc(px, py, cr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const edgeY = isTop ? y + h - 4 : y;
+    ctx.fillStyle = 'rgba(255, 220, 160, 0.6)';
+    if (isTop) ctx.fillRect(x, y + h - 4, w, 4);
+    else ctx.fillRect(x, y, w, 4);
+  }
+
+  function drawGasVortex(pipe, x, y, w, h, isTop, bright) {
+    const grad = ctx.createLinearGradient(x, 0, x + w, 0);
+    grad.addColorStop(0, 'rgba(180, 120, 60, 0.85)');
+    grad.addColorStop(0.5, 'rgba(255, 200, 130, 0.9)');
+    grad.addColorStop(1, 'rgba(180, 120, 60, 0.85)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, y, w, h);
+
+    const stripeCount = Math.max(3, Math.floor(h / 30));
+    for (let i = 0; i < stripeCount; i++) {
+      const py = y + (h / stripeCount) * i;
+      const shade = i % 2 === 0 ? 0.25 : 0.1;
+      ctx.fillStyle = `rgba(120, 70, 30, ${shade})`;
+      ctx.fillRect(x, py, w, h / stripeCount);
+    }
+
+    const edgeY = isTop ? y + h - 5 : y;
+    const edgeGrad = ctx.createLinearGradient(x, edgeY, x, edgeY + 5);
+    edgeGrad.addColorStop(0, 'rgba(255, 230, 150, 0.95)');
+    edgeGrad.addColorStop(1, 'rgba(255, 180, 80, 0)');
+    ctx.fillStyle = edgeGrad;
+    if (isTop) ctx.fillRect(x, y + h - 5, w, 5);
+    else ctx.fillRect(x, y, w, 5);
+  }
+
+  function drawIceSpike(pipe, x, y, w, h, isTop, bright) {
+    const grad = ctx.createLinearGradient(x, 0, x + w, 0);
+    grad.addColorStop(0, `hsl(190, 40%, ${Math.round(35 * bright + 15)}%)`);
+    grad.addColorStop(0.5, `hsl(190, 60%, ${Math.round(75 * bright + 20)}%)`);
+    grad.addColorStop(1, `hsl(190, 40%, ${Math.round(38 * bright + 15)}%)`);
+    ctx.fillStyle = grad;
+
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    const spikes = 4;
+    for (let i = 0; i < spikes; i++) {
+      const sy = y + (h / spikes) * i;
+      const spikeH = h / spikes;
+      ctx.lineTo(x + 3, sy);
+      ctx.lineTo(x - 6 + Math.sin(pipe.seed + i) * 3, sy + spikeH * 0.5);
+      ctx.lineTo(x + 3, sy + spikeH);
+    }
+    ctx.lineTo(x, y + h);
+    ctx.lineTo(x + w, y + h);
+    for (let i = spikes - 1; i >= 0; i--) {
+      const sy = y + (h / spikes) * i;
+      const spikeH = h / spikes;
+      ctx.lineTo(x + w - 3, sy + spikeH);
+      ctx.lineTo(x + w + 6 + Math.sin(pipe.seed + i * 2) * 3, sy + spikeH * 0.5);
+      ctx.lineTo(x + w - 3, sy);
+    }
+    ctx.lineTo(x + w, y);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.shadowColor = 'rgba(160, 230, 255, 0.7)';
+    ctx.shadowBlur = 10;
+    ctx.strokeStyle = 'rgba(200, 240, 255, 0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    const edgeY = isTop ? y + h - 5 : y;
+    ctx.fillStyle = 'rgba(220, 250, 255, 0.9)';
+    if (isTop) ctx.fillRect(x, y + h - 5, w, 5);
+    else ctx.fillRect(x, y, w, 5);
+  }
+
+  function drawCrystalPillar(pipe, x, y, w, h, isTop, bright) {
+    const grad = ctx.createLinearGradient(x, 0, x + w, 0);
+    grad.addColorStop(0, `hsl(180, 55%, ${Math.round(40 * bright + 15)}%)`);
+    grad.addColorStop(0.5, `hsl(180, 70%, ${Math.round(80 * bright + 25)}%)`);
+    grad.addColorStop(1, `hsl(180, 55%, ${Math.round(40 * bright + 15)}%)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, y, w, h);
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.lineWidth = 1;
+    const facets = Math.max(2, Math.floor(h / 40));
+    for (let i = 0; i < facets; i++) {
+      const py = y + (h / facets) * i;
+      ctx.beginPath();
+      ctx.moveTo(x, py);
+      ctx.lineTo(x + w, py + (h / facets));
+      ctx.stroke();
+    }
+
+    for (let i = 0; i < 5; i++) {
+      const cy = y + (h / 5) * (i + 0.5);
+      const side = (i % 2 === 0) ? -1 : 1;
+      const size = 8 + (i % 3) * 3;
+      ctx.fillStyle = 'hsla(180, 80%, 85%, 0.9)';
+      ctx.beginPath();
+      if (side < 0) {
+        ctx.moveTo(x, cy - 3);
+        ctx.lineTo(x - size, cy);
+        ctx.lineTo(x, cy + 3);
+      } else {
+        ctx.moveTo(x + w, cy - 3);
+        ctx.lineTo(x + w + size, cy);
+        ctx.lineTo(x + w, cy + 3);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    const edgeY = isTop ? y + h - 5 : y;
+    ctx.fillStyle = 'rgba(200, 240, 255, 0.9)';
+    if (isTop) ctx.fillRect(x, y + h - 5, w, 5);
+    else ctx.fillRect(x, y, w, 5);
+  }
+
+  function drawWaterJet(pipe, x, y, w, h, isTop, bright) {
+    const grad = ctx.createLinearGradient(x, 0, x + w, 0);
+    grad.addColorStop(0, `hsl(220, 60%, ${Math.round(28 * bright + 10)}%)`);
+    grad.addColorStop(0.5, `hsl(220, 75%, ${Math.round(60 * bright + 22)}%)`);
+    grad.addColorStop(1, `hsl(220, 60%, ${Math.round(30 * bright + 10)}%)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, y, w, h);
+
+    for (let i = 0; i < 8; i++) {
+      const phase = (game.time * 1.5 + i * 0.7 + pipe.seed) % 1;
+      const bx = x + 10 + ((pipe.seed * (i + 1) * 7) % (w - 20));
+      const by = isTop ? y + phase * h : y + (1 - phase) * h;
+      ctx.fillStyle = `rgba(180, 220, 255, ${Math.sin(phase * Math.PI) * 0.7})`;
+      ctx.beginPath();
+      ctx.arc(bx, by, 1 + (i % 3), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const edgeY = isTop ? y + h - 4 : y;
+    const edgeGrad = ctx.createLinearGradient(x, edgeY, x, edgeY + 4);
+    edgeGrad.addColorStop(0, 'rgba(140, 200, 255, 0.9)');
+    edgeGrad.addColorStop(1, 'rgba(60, 120, 255, 0)');
+    ctx.fillStyle = edgeGrad;
+    if (isTop) ctx.fillRect(x, y + h - 4, w, 4);
+    else ctx.fillRect(x, y, w, 4);
+  }
+
+  function drawStarSwirl(pipe, x, y, w, h, isTop, bright) {
+    const grad = ctx.createLinearGradient(x, 0, x + w, 0);
+    grad.addColorStop(0, 'rgba(40, 20, 70, 0.9)');
+    grad.addColorStop(0.5, 'rgba(100, 60, 150, 0.85)');
+    grad.addColorStop(1, 'rgba(40, 20, 70, 0.9)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, y, w, h);
+
+    for (let i = 0; i < 20; i++) {
+      const px = x + ((pipe.seed * (i + 1) * 13) % w);
+      const py = y + ((pipe.seed * (i + 1) * 17) % h);
+      const twinkle = 0.5 + Math.sin(game.time * 4 + i) * 0.5;
+      ctx.fillStyle = `rgba(255, 255, 255, ${twinkle})`;
+      ctx.beginPath();
+      ctx.arc(px, py, 0.6 + (i % 3) * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const edgeY = isTop ? y + h - 5 : y;
+    const edgeGrad = ctx.createLinearGradient(x, edgeY, x, edgeY + 5);
+    edgeGrad.addColorStop(0, 'rgba(255, 220, 255, 0.9)');
+    edgeGrad.addColorStop(1, 'rgba(200, 140, 255, 0)');
+    ctx.fillStyle = edgeGrad;
+    if (isTop) ctx.fillRect(x, y + h - 5, w, 5);
+    else ctx.fillRect(x, y, w, 5);
+  }
+
+  function drawNebulaTrail(pipe, x, y, w, h, isTop, bright) {
+    const grad = ctx.createLinearGradient(x, 0, x + w, 0);
+    grad.addColorStop(0, 'rgba(120, 40, 100, 0.85)');
+    grad.addColorStop(0.5, 'rgba(200, 100, 180, 0.9)');
+    grad.addColorStop(1, 'rgba(120, 40, 100, 0.85)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, y, w, h);
+
+    for (let i = 0; i < 6; i++) {
+      const px = x + 10 + ((pipe.seed * (i + 1) * 11) % (w - 20));
+      const py = y + ((pipe.seed * (i + 1) * 19) % h);
+      const pr = 8 + (i % 3) * 4;
+      const cloudGrad = ctx.createRadialGradient(px, py, 0, px, py, pr);
+      cloudGrad.addColorStop(0, 'rgba(255, 200, 255, 0.5)');
+      cloudGrad.addColorStop(1, 'rgba(255, 100, 200, 0)');
+      ctx.fillStyle = cloudGrad;
+      ctx.beginPath();
+      ctx.arc(px, py, pr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const edgeY = isTop ? y + h - 5 : y;
+    const edgeGrad = ctx.createLinearGradient(x, edgeY, x, edgeY + 5);
+    edgeGrad.addColorStop(0, 'rgba(255, 220, 255, 0.9)');
+    edgeGrad.addColorStop(1, 'rgba(220, 100, 220, 0)');
+    ctx.fillStyle = edgeGrad;
+    if (isTop) ctx.fillRect(x, y + h - 5, w, 5);
+    else ctx.fillRect(x, y, w, 5);
+  }
+
+  function drawQuantumAnomaly(pipe, x, y, w, h, isTop, bright) {
+    const grad = ctx.createLinearGradient(x, 0, x + w, 0);
+    grad.addColorStop(0, 'rgba(20, 10, 40, 0.9)');
+    grad.addColorStop(0.5, 'rgba(60, 30, 100, 0.85)');
+    grad.addColorStop(1, 'rgba(20, 10, 40, 0.9)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, y, w, h);
+
+    const warpCount = Math.max(3, Math.floor(h / 50));
+    for (let i = 0; i < warpCount; i++) {
+      const py = y + (h / warpCount) * (i + 0.5);
+      const phase = game.time * 3 + pipe.seed + i;
+      ctx.strokeStyle = `hsla(${(phase * 60) % 360}, 90%, 70%, 0.5)`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let px = x; px <= x + w; px += 4) {
+        const wave = Math.sin(px * 0.2 + phase) * 3 + Math.cos(px * 0.1 + phase * 1.3) * 2;
+        if (px === x) ctx.moveTo(px, py + wave);
+        else ctx.lineTo(px, py + wave);
+      }
+      ctx.stroke();
+    }
+
+    for (let i = 0; i < 8; i++) {
+      const px = x + ((pipe.seed * (i + 1) * 13) % w);
+      const py = y + ((pipe.seed * (i + 1) * 17) % h);
+      const hue = (game.time * 100 + i * 45) % 360;
+      ctx.fillStyle = `hsla(${hue}, 100%, 70%, 0.85)`;
+      ctx.beginPath();
+      ctx.arc(px, py, 1.5 + Math.sin(game.time * 5 + i) * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const edgeY = isTop ? y + h - 5 : y;
+    const edgeGrad = ctx.createLinearGradient(x, edgeY, x, edgeY + 5);
+    edgeGrad.addColorStop(0, 'rgba(200, 160, 255, 0.9)');
+    edgeGrad.addColorStop(1, 'rgba(140, 80, 255, 0)');
+    ctx.fillStyle = edgeGrad;
+    if (isTop) ctx.fillRect(x, y + h - 5, w, 5);
+    else ctx.fillRect(x, y, w, 5);
+  }
+
+  function drawPowers() {
+    for (const pw of game.powers) {
+      const bobY = pw.y + Math.sin(pw.bob) * 6;
+      const pulse = 1 + Math.sin(game.time * 4 + pw.bob) * 0.08;
+      const R = pw.r * pulse;
+
+      const colors = {
+        shield: ['#5ce1ff', '#0a6a8a'],
+        slow:   ['#c084fc', '#5a2a8a'],
+      };
+      const [c1, c2] = colors[pw.type];
+
+      const auraR = R * 1.6;
+      const grd = ctx.createRadialGradient(pw.x, bobY, R * 0.2, pw.x, bobY, auraR);
+      grd.addColorStop(0, c1 + 'dd');
+      grd.addColorStop(0.55, c1 + '55');
+      grd.addColorStop(1, c1 + '00');
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.arc(pw.x, bobY, auraR, 0, Math.PI * 2);
+      ctx.fill();
+
+      pw.spin = (pw.spin || 0) + 0.02;
+      ctx.save();
+      ctx.translate(pw.x, bobY);
+      ctx.rotate(pw.spin);
+      ctx.strokeStyle = c1;
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([7, 5]);
+      ctx.beginPath();
+      ctx.arc(0, 0, R * 1.35, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+
+      ctx.fillStyle = c2;
+      ctx.beginPath();
+      ctx.arc(pw.x, bobY, R, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = c1;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(pw.x, bobY, R, 0, Math.PI * 2);
+      ctx.stroke();
+
+      const hlGrd = ctx.createRadialGradient(pw.x - R * 0.35, bobY - R * 0.35, 2, pw.x, bobY, R);
+      hlGrd.addColorStop(0, 'rgba(255,255,255,0.55)');
+      hlGrd.addColorStop(0.5, 'rgba(255,255,255,0)');
+      ctx.fillStyle = hlGrd;
+      ctx.beginPath();
+      ctx.arc(pw.x, bobY, R, 0, Math.PI * 2);
+      ctx.fill();
+
+      const iconSize = Math.round(R * 1.1);
+      ctx.fillStyle = '#fff';
+      ctx.font = `bold ${iconSize}px "Segoe UI", "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = 3;
+      const icon = pw.type === 'shield' ? '🛡' : '⏳';
+      ctx.fillText(icon, pw.x, bobY + 1);
+      ctx.shadowBlur = 0;
+
+      ctx.textAlign = 'start';
+      ctx.textBaseline = 'alphabetic';
+    }
+  }
+
+  function drawParticles() {
+    for (const p of game.particles) {
+      const a = clamp(p.life / p.maxLife, 0, 1);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawShip(dayT) {
+    const b = game.bird;
+    const skin = Storage.getSelectedSkinData();
+    const c = skin.colors;
+
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.rotate(b.angle);
+
+    const R = CFG.birdRadius;
+
+    if (c.nebulaMist) {
+      const mistGrad = ctx.createRadialGradient(0, 0, R * 1.2, 0, 0, R * 2.4);
+      mistGrad.addColorStop(0, 'rgba(255,140,220,0.35)');
+      mistGrad.addColorStop(1, 'rgba(255,140,220,0)');
+      ctx.fillStyle = mistGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, R * 2.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (c.icyRing) {
+      ctx.save();
+      ctx.rotate(game.time * 0.5);
+      ctx.strokeStyle = 'rgba(200,240,255,0.55)';
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, R * 1.8, R * 0.6, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    if (c.infinity) {
+      for (let i = 0; i < 8; i++) {
+        const ang = game.time * 3 + i * Math.PI / 4;
+        const hue = (game.time * 80 + i * 45) % 360;
+        ctx.fillStyle = `hsla(${hue}, 100%, 70%, 0.85)`;
+        ctx.beginPath();
+        ctx.arc(Math.cos(ang) * R * 2.1, Math.sin(ang) * R * 2.1, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // ★ Щит — цвет и цифра меняются в зависимости от оставшихся труб
+    if (game.shield > 0) {
+      const pulse = 1 + Math.sin(game.time * 20) * 0.08;
+      const remaining = CFG.shieldDuration - game.shieldPipeCounter;
+      const hue = 190 - game.shieldPipeCounter * 30;
+      const c1 = `hsla(${hue}, 95%, 70%, `;
+
+      ctx.beginPath();
+      ctx.arc(0, 0, R * 1.9 * pulse, 0, Math.PI * 2);
+      const grd = ctx.createRadialGradient(0, 0, R, 0, 0, R * 1.9);
+      grd.addColorStop(0, c1 + '0)');
+      grd.addColorStop(0.7, c1 + '0.35)');
+      grd.addColorStop(1, c1 + '0.05)');
+      ctx.fillStyle = grd;
+      ctx.fill();
+      ctx.strokeStyle = c1 + `${0.6 + Math.sin(game.time * 20) * 0.3})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Цифра остатка труб
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 12px "Segoe UI", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = `hsla(${hue}, 95%, 70%, 0.9)`;
+      ctx.shadowBlur = 8;
+      ctx.fillText(`${remaining}`, 0, -R * 2.4);
+      ctx.shadowBlur = 0;
+      ctx.textAlign = 'start';
+      ctx.textBaseline = 'alphabetic';
+    }
+
+    const flicker = 0.7 + Math.sin(game.time * 40) * 0.3;
+    const exhaustLen = 22 * flicker + Math.min(12, Math.abs(b.vy) * 1.2);
+
+    ctx.save();
+    const exhaustGrad = ctx.createLinearGradient(-R - 3, 0, -R - exhaustLen, 0);
+    exhaustGrad.addColorStop(0, c.exhaust1);
+    exhaustGrad.addColorStop(0.3, c.exhaust2);
+    exhaustGrad.addColorStop(0.7, c.exhaust3);
+    exhaustGrad.addColorStop(1, c.exhaust4);
+    ctx.fillStyle = exhaustGrad;
+    ctx.beginPath();
+    ctx.moveTo(-R - 2, -4);
+    ctx.lineTo(-R - exhaustLen, 0);
+    ctx.lineTo(-R - 2, 4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = `rgba(255,255,255,${0.6 + flicker * 0.4})`;
+    ctx.beginPath();
+    ctx.moveTo(-R - 2, -1.8);
+    ctx.lineTo(-R - exhaustLen * 0.55, 0);
+    ctx.lineTo(-R - 2, 1.8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    const bodyGrad = ctx.createLinearGradient(0, -R, 0, R);
+    bodyGrad.addColorStop(0, c.hullTop);
+    bodyGrad.addColorStop(0.35, c.hullMid);
+    bodyGrad.addColorStop(0.6, c.hullLow);
+    bodyGrad.addColorStop(1, c.hullBot);
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.moveTo(R + 8, 0);
+    ctx.quadraticCurveTo(R - 2, -R * 0.9, -R + 2, -R * 0.7);
+    ctx.lineTo(-R - 3, -R * 0.5);
+    ctx.lineTo(-R - 3, R * 0.5);
+    ctx.lineTo(-R + 2, R * 0.7);
+    ctx.quadraticCurveTo(R - 2, R * 0.9, R + 8, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = c.stroke;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(R + 8, 0);
+    ctx.quadraticCurveTo(R - 2, -R * 0.9, -R + 2, -R * 0.7);
+    ctx.lineTo(-R - 3, -R * 0.5);
+    ctx.lineTo(-R - 3, R * 0.5);
+    ctx.lineTo(-R + 2, R * 0.7);
+    ctx.quadraticCurveTo(R - 2, R * 0.9, R + 8, 0);
+    ctx.closePath();
+    ctx.clip();
+
+    if (c.craters) {
+      for (let i = 0; i < 5; i++) {
+        const crx = -R + 3 + (i * 7) % (R * 2);
+        const cry = -R * 0.5 + ((i * 11) % (R * 1.2));
+        ctx.fillStyle = 'rgba(30,20,10,0.55)';
+        ctx.beginPath();
+        ctx.arc(crx, cry, 2 + (i % 2), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    if (c.stripes) {
+      for (let i = 0; i < 6; i++) {
+        ctx.fillStyle = `hsla(35, 70%, ${50 + (i % 2) * 15}%, 0.4)`;
+        ctx.fillRect(-R - 3, -R + i * (R * 0.35), R * 2 + 12, R * 0.18);
+      }
+    }
+
+    if (c.crystals) {
+      for (let i = 0; i < 4; i++) {
+        const kx = -R + 4 + i * (R * 0.5);
+        const ky = -R * 0.4 + (i % 2) * R * 0.5;
+        ctx.strokeStyle = 'rgba(200,250,255,0.7)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(kx, ky);
+        ctx.lineTo(kx + 3, ky - 3);
+        ctx.lineTo(kx + 6, ky);
+        ctx.stroke();
+      }
+    }
+
+    if (c.deepWaves) {
+      for (let i = 0; i < 3; i++) {
+        const wy = -R * 0.4 + i * (R * 0.4);
+        ctx.strokeStyle = 'rgba(140,180,255,0.4)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let px = -R; px <= R; px += 4) {
+          const y = wy + Math.sin(px * 0.3 + game.time * 3 + i) * 2;
+          if (px === -R) ctx.moveTo(px, y);
+          else ctx.lineTo(px, y);
+        }
+        ctx.stroke();
+      }
+    }
+
+    if (c.stardust) {
+      for (let i = 0; i < 10; i++) {
+        const sx = -R + 2 + ((i * 13) % (R * 2));
+        const sy = -R * 0.6 + ((i * 17) % (R * 1.2));
+        ctx.fillStyle = `rgba(255,255,255,${0.4 + Math.sin(game.time * 3 + i) * 0.4})`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 0.9, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    if (c.rainbow) {
+      for (let i = 0; i < 6; i++) {
+        const hue = (game.time * 100 + i * 60) % 360;
+        ctx.fillStyle = `hsla(${hue}, 90%, 65%, 0.5)`;
+        ctx.fillRect(-R - 3, -R + i * (R * 0.35), R * 2 + 12, R * 0.32);
+      }
+    }
+
+    ctx.restore();
+
+    const wingFlap = Math.sin(game.time * 15) * 1.5;
+    ctx.fillStyle = c.wing;
+    ctx.beginPath();
+    ctx.moveTo(-R + 3, -R * 0.55);
+    ctx.lineTo(2, -R - 5 + wingFlap);
+    ctx.lineTo(R - 2, -R * 0.4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = c.stroke;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(-R + 3, R * 0.55);
+    ctx.lineTo(2, R + 5 - wingFlap);
+    ctx.lineTo(R - 2, R * 0.4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    const cockpitGrad = ctx.createRadialGradient(-1, -R * 0.35 - 1, 0, 2, -R * 0.35, 5);
+    cockpitGrad.addColorStop(0, c.cockpit1);
+    cockpitGrad.addColorStop(0.5, c.cockpit2);
+    cockpitGrad.addColorStop(1, c.cockpit3);
+    ctx.fillStyle = cockpitGrad;
+    ctx.beginPath();
+    ctx.arc(2, -R * 0.35, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(180,230,255,0.9)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.beginPath();
+    ctx.arc(0.5, -R * 0.35 - 1.5, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = c.light;
+    ctx.beginPath();
+    ctx.arc(R + 6, 0, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.3;
+    ctx.beginPath();
+    ctx.arc(R + 6, 0, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    const sideThruster = 0.6 + Math.sin(game.time * 30) * 0.4;
+    ctx.globalAlpha = sideThruster;
+    ctx.fillStyle = c.thruster;
+    ctx.beginPath();
+    ctx.arc(-R - 1, -4, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(-R - 1, 4, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    ctx.restore();
+  }
+
+  // ============ ЭКРАНЫ ============
+  function drawTitle() {
+    const g = ctx.createLinearGradient(0, 140, 0, 240);
+    g.addColorStop(0, '#ffe066');
+    g.addColorStop(0.5, '#ff8ac4');
+    g.addColorStop(1, '#9b6bff');
+    ctx.fillStyle = g;
+    ctx.font = 'bold 54px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(255,150,220,0.7)';
+    ctx.shadowBlur = 28;
+    ctx.fillText('COSMIC', CFG.width / 2, 185);
+    ctx.fillText('GLIDER', CFG.width / 2, 240);
+    ctx.shadowBlur = 0;
+    ctx.textAlign = 'start';
+  }
+
+  function drawMainMenu() {
+    ctx.fillStyle = 'rgba(10,5,25,0.5)';
+    ctx.fillRect(0, 0, CFG.width, CFG.height);
+    drawTitle();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffe066';
+    ctx.font = 'bold 18px "Segoe UI", sans-serif';
+    ctx.shadowColor = 'rgba(255,200,80,0.6)';
+    ctx.shadowBlur = 8;
+    ctx.fillText(`🥇 Твой рекорд: ${Storage.getBest()}`, CFG.width / 2, 285);
+    ctx.shadowBlur = 0;
+    ctx.textAlign = 'start';
+
+    const bw = 280, bh = 56, bx = (CFG.width - bw) / 2;
+    const startY = 320, gap = 66;
+
+    currentButtons = [
+      makeButton(bx, startY + gap * 0, bw, bh, '🎮  ИГРАТЬ',            () => startGame(),       true),
+      makeButton(bx, startY + gap * 1, bw, bh, '🎨  СКИНЫ',             () => goToSkins(),       false),
+      makeButton(bx, startY + gap * 2, bw, bh, '🏆  ТАБЛИЦА РЕКОРДОВ',  () => goToLeaderboard(), false),
+      makeButton(bx, startY + gap * 3, bw, bh, '📊  МОИ ПОПЫТКИ',       () => goToAttempts(),    false),
+      makeButton(bx, startY + gap * 4, bw, bh, '🚪  ВЫХОД',              () => goToExit(),        false),
+    ];
+
+    ctx.textAlign = 'center';
+ctx.fillStyle = 'rgba(255,255,255,0.5)';
+ctx.font = 'bold 14px "Segoe UI", sans-serif';
+ctx.letterSpacing = '4px';
+ctx.shadowColor = 'rgba(255,150,220,0.6)';
+ctx.shadowBlur = 10;
+ctx.fillText('by КЭПАС', CFG.width / 2, CFG.height - 30);
+ctx.shadowBlur = 0;
+ctx.letterSpacing = '0px';
+ctx.textAlign = 'start';}
+
+  function drawLeaderboard() {
+    ctx.fillStyle = 'rgba(5,3,20,0.85)';
+    ctx.fillRect(0, 0, CFG.width, CFG.height);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffe066';
+    ctx.font = 'bold 34px "Segoe UI", sans-serif';
+    ctx.shadowColor = 'rgba(255,180,80,0.6)';
+    ctx.shadowBlur = 18;
+    ctx.fillText('🏆 ТАБЛИЦА РЕКОРДОВ', CFG.width / 2, 80);
+    ctx.shadowBlur = 0;
+
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 15px "Segoe UI", sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillText('#', 60, 130);
+    ctx.fillText('ОЧКИ', 110, 130);
+    ctx.fillText('ДАТА', 230, 130);
+    ctx.textAlign = 'start';
+
+    ctx.strokeStyle = 'rgba(150,120,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(50, 145);
+    ctx.lineTo(CFG.width - 50, 145);
+    ctx.stroke();
+
+    const top = Storage.getTopScores(10);
+    if (top.length === 0) {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.font = 'italic 18px "Segoe UI", sans-serif';
+      ctx.fillText('Пока нет рекордов 😢', CFG.width / 2, 350);
+      ctx.fillText('Сыграй первую игру!', CFG.width / 2, 385);
+      ctx.textAlign = 'start';
+    } else {
+      const medals = ['🥇', '🥈', '🥉'];
+      const rowH = 42, startY = 175;
+      for (let i = 0; i < top.length; i++) {
+        const item = top[i];
+        const y = startY + i * rowH;
+        if (i === 0) { ctx.fillStyle = 'rgba(255,215,0,0.15)'; ctx.fillRect(50, y - 24, CFG.width - 100, 34); }
+        else if (i === 1) { ctx.fillStyle = 'rgba(192,192,192,0.1)'; ctx.fillRect(50, y - 24, CFG.width - 100, 34); }
+        else if (i === 2) { ctx.fillStyle = 'rgba(205,127,50,0.1)'; ctx.fillRect(50, y - 24, CFG.width - 100, 34); }
+
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 18px "Segoe UI", sans-serif';
+        if (i < 3) { ctx.fillStyle = '#fff'; ctx.fillText(medals[i], 60, y); }
+        else { ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fillText(`${i + 1}`, 68, y); }
+
+        ctx.fillStyle = '#ffe066';
+        ctx.font = 'bold 20px "Segoe UI", sans-serif';
+        ctx.fillText(`${item.score}`, 110, y);
+
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.font = '14px "Segoe UI", sans-serif';
+        ctx.fillText(formatDate(item.date), 230, y);
+      }
+    }
+
+    const bw = 220, bh = 56, bx = (CFG.width - bw) / 2, by = CFG.height - 100;
+    currentButtons = [makeButton(bx, by, bw, bh, '← НАЗАД', () => goToMainMenu(), false)];
+  }
+
+  function drawAttempts() {
+    ctx.fillStyle = 'rgba(5,3,20,0.85)';
+    ctx.fillRect(0, 0, CFG.width, CFG.height);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#7ad7ff';
+    ctx.font = 'bold 34px "Segoe UI", sans-serif';
+    ctx.shadowColor = 'rgba(120,200,255,0.6)';
+    ctx.shadowBlur = 18;
+    ctx.fillText('📊 МОИ ПОПЫТКИ', CFG.width / 2, 80);
+    ctx.shadowBlur = 0;
+
+    const history = Storage.getHistory();
+    const recent = Storage.getRecentAttempts(8);
+
+    if (history.length > 0) {
+      const scores = history.map(h => h.score);
+      const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+      const best = Math.max(...scores);
+      ctx.textAlign = 'center';
+      ctx.font = '14px "Segoe UI", sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.fillText(`Всего игр: ${history.length}    Средний: ${avg}    Лучший: ${best}`, CFG.width / 2, 118);
+      ctx.textAlign = 'start';
+    }
+
+    ctx.strokeStyle = 'rgba(120,200,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(50, 140);
+    ctx.lineTo(CFG.width - 50, 140);
+    ctx.stroke();
+
+    if (recent.length === 0) {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.font = 'italic 18px "Segoe UI", sans-serif';
+      ctx.fillText('Ты ещё не играл 😴', CFG.width / 2, 350);
+      ctx.fillText('Нажми "Играть" в меню!', CFG.width / 2, 385);
+      ctx.textAlign = 'start';
+    } else {
+      const rowH = 44, startY = 175;
+      for (let i = 0; i < recent.length; i++) {
+        const item = recent[i];
+        const y = startY + i * rowH;
+        const isPersonalBest = item.score === Storage.getBest();
+
+        ctx.fillStyle = i % 2 === 0 ? 'rgba(120,200,255,0.06)' : 'rgba(120,200,255,0.02)';
+        ctx.fillRect(50, y - 24, CFG.width - 100, 36);
+
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 15px "Segoe UI", sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.fillText(`#${recent.length - i}`, 65, y);
+
+        ctx.fillStyle = isPersonalBest ? '#ffe066' : '#fff';
+        ctx.font = 'bold 20px "Segoe UI", sans-serif';
+        ctx.fillText(`${item.score}`, 130, y);
+
+        if (isPersonalBest) {
+          ctx.font = 'bold 12px "Segoe UI", sans-serif';
+          ctx.fillStyle = '#ffb800';
+          ctx.fillText('★ РЕКОРД', 180, y);
+        }
+
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.font = '13px "Segoe UI", sans-serif';
+        ctx.fillText(formatDate(item.date), 290, y);
+      }
+    }
+
+    const bw = 220, bh = 56, bx = (CFG.width - bw) / 2, by = CFG.height - 100;
+    currentButtons = [makeButton(bx, by, bw, bh, '← НАЗАД', () => goToMainMenu(), false)];
+  }
+
+  function drawSkins() {
+    ctx.fillStyle = 'rgba(5,3,20,0.92)';
+    ctx.fillRect(0, 0, CFG.width, CFG.height);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffb8ff';
+    ctx.font = 'bold 30px "Segoe UI", sans-serif';
+    ctx.shadowColor = 'rgba(255,120,255,0.6)';
+    ctx.shadowBlur = 18;
+    ctx.fillText('🎨 СКИНЫ КОРАБЛЯ', CFG.width / 2, 42);
+    ctx.shadowBlur = 0;
+
+    const best = Storage.getBest();
+    const unlocked = Storage.getUnlockedSkins();
+    const selected = Storage.getSelectedSkin();
+
+    ctx.font = '12px "Segoe UI", sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.fillText(`Открыто: ${unlocked.length} / ${SKINS.length}    Рекорд: ${best}`, CFG.width / 2, 64);
+    ctx.textAlign = 'start';
+
+    ctx.strokeStyle = 'rgba(255,180,255,0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(30, 78);
+    ctx.lineTo(CFG.width - 30, 78);
+    ctx.stroke();
+
+    const cols = 2;
+    const cardW = 210, cardH = 96;
+    const gapX = 10, gapY = 8;
+    const startX = (CFG.width - (cols * cardW + (cols - 1) * gapX)) / 2;
+    const startY = 90;
+
+    const clickableRects = [];
+
+    for (let i = 0; i < SKINS.length; i++) {
+      const skin = SKINS[i];
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const cx = startX + col * (cardW + gapX);
+      const cy = startY + row * (cardH + gapY);
+
+      const isUnlocked = unlocked.includes(skin.id);
+      const isSelected = selected === skin.id;
+      const rarity = RARITY[skin.rarity];
+
+      const bgGrad = ctx.createLinearGradient(cx, cy, cx, cy + cardH);
+      if (isSelected) {
+        bgGrad.addColorStop(0, 'rgba(120,255,160,0.28)');
+        bgGrad.addColorStop(1, 'rgba(60,180,100,0.15)');
+      } else if (isUnlocked) {
+        bgGrad.addColorStop(0, 'rgba(60,40,120,0.55)');
+        bgGrad.addColorStop(1, 'rgba(20,10,50,0.55)');
+      } else {
+        bgGrad.addColorStop(0, 'rgba(20,20,40,0.7)');
+        bgGrad.addColorStop(1, 'rgba(10,10,20,0.7)');
+      }
+      ctx.fillStyle = bgGrad;
+      roundRect(ctx, cx, cy, cardW, cardH, 10);
+      ctx.fill();
+
+      ctx.strokeStyle = isSelected ? 'rgba(120,255,160,0.95)' :
+        isUnlocked ? rarity.color : 'rgba(70,70,80,0.7)';
+      ctx.lineWidth = isSelected ? 2.5 : (isUnlocked ? 2 : 1);
+      ctx.shadowColor = isUnlocked && !isSelected ? rarity.glow : 'transparent';
+      ctx.shadowBlur = isUnlocked && !isSelected ? 8 : 0;
+      roundRect(ctx, cx, cy, cardW, cardH, 10);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      ctx.save();
+      if (isUnlocked) drawShipPreview(cx + 52, cy + cardH / 2, 0.62, skin);
+      else drawShipSilhouette(cx + 52, cy + cardH / 2, 0.62);
+      ctx.restore();
+
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 14px "Segoe UI", sans-serif';
+      ctx.fillStyle = isUnlocked ? '#fff' : 'rgba(255,255,255,0.45)';
+      ctx.fillText(isUnlocked ? skin.name : '? ? ?', cx + 100, cy + 22);
+
+      ctx.font = 'bold 10px "Segoe UI", sans-serif';
+      ctx.fillStyle = isUnlocked ? rarity.color : 'rgba(150,150,160,0.6)';
+      ctx.fillText(rarity.name.toUpperCase(), cx + 100, cy + 38);
+
+      if (isSelected) {
+        ctx.fillStyle = '#7affa0';
+        ctx.font = 'bold 11px "Segoe UI", sans-serif';
+        ctx.fillText('✓ ВЫБРАН', cx + 100, cy + 56);
+      } else if (isUnlocked) {
+        ctx.fillStyle = 'rgba(255,200,255,0.8)';
+        ctx.font = '10px "Segoe UI", sans-serif';
+        ctx.fillText('Нажми чтобы выбрать', cx + 100, cy + 56);
+      } else {
+        const unlockZone = ZONES[skin.unlockZone];
+        ctx.fillStyle = 'rgba(255,180,180,0.85)';
+        ctx.font = 'bold 10px "Segoe UI", sans-serif';
+        ctx.fillText(`🔒 ${unlockZone.name}`, cx + 100, cy + 56);
+
+        const prevScore = skin.unlockZone > 0 ? ZONES[skin.unlockZone - 1].unlockScore + CFG.zoneSize : 0;
+        const targetScore = skin.unlockScore;
+        const prog = clamp((best - prevScore) / (targetScore - prevScore), 0, 1);
+
+        const barW = 100;
+        const barX = cx + 100;
+        const barY = cy + 70;
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        roundRect(ctx, barX, barY, barW, 5, 2.5);
+        ctx.fill();
+        ctx.fillStyle = rarity.color;
+        roundRect(ctx, barX, barY, barW * prog, 5, 2.5);
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.font = '9px "Segoe UI", sans-serif';
+        ctx.fillText(`${best} / ${targetScore}`, barX + barW + 4, barY + 5);
+      }
+      ctx.textAlign = 'start';
+
+      if (isUnlocked && !isSelected) {
+        clickableRects.push({
+          x: cx, y: cy, w: cardW, h: cardH,
+          action: () => { Storage.setSelectedSkin(skin.id); Sound.power(); },
+        });
+      }
+    }
+
+    currentButtons = clickableRects.map(r => makeButton(r.x, r.y, r.w, r.h, '', r.action, false));
+    const bw = 220, bh = 52, bx = (CFG.width - bw) / 2, by = CFG.height - 70;
+    currentButtons.push(makeButton(bx, by, bw, bh, '← НАЗАД', () => goToMainMenu(), false));
+  }
+
+  function drawShipSilhouette(cx, cy, scale) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(scale, scale);
+    ctx.rotate(-0.15);
+    const R = CFG.birdRadius;
+
+    ctx.fillStyle = 'rgba(30,30,45,0.95)';
+    ctx.beginPath();
+    ctx.moveTo(R + 8, 0);
+    ctx.quadraticCurveTo(R - 2, -R * 0.9, -R + 2, -R * 0.7);
+    ctx.lineTo(-R - 3, -R * 0.5);
+    ctx.lineTo(-R - 3, R * 0.5);
+    ctx.lineTo(-R + 2, R * 0.7);
+    ctx.quadraticCurveTo(R - 2, R * 0.9, R + 8, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255,200,120,0.75)';
+    ctx.strokeStyle = 'rgba(255,200,120,0.85)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, -3, 4, Math.PI, 0);
+    ctx.stroke();
+    ctx.fillRect(-5, -1, 10, 8);
+
+    ctx.restore();
+  }
+
+  function drawShipPreview(cx, cy, scale, skin) {
+    const c = skin.colors;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(scale, scale);
+    ctx.rotate(-0.15);
+    const R = CFG.birdRadius;
+
+    const flicker = 0.7 + Math.sin(game.time * 40) * 0.3;
+    const exLen = 18 * flicker + 4;
+    const exhaustGrad = ctx.createLinearGradient(-R - 3, 0, -R - exLen, 0);
+    exhaustGrad.addColorStop(0, c.exhaust1);
+    exhaustGrad.addColorStop(0.3, c.exhaust2);
+    exhaustGrad.addColorStop(0.7, c.exhaust3);
+    exhaustGrad.addColorStop(1, c.exhaust4);
+    ctx.fillStyle = exhaustGrad;
+    ctx.beginPath();
+    ctx.moveTo(-R - 2, -4);
+    ctx.lineTo(-R - exLen, 0);
+    ctx.lineTo(-R - 2, 4);
+    ctx.closePath();
+    ctx.fill();
+
+    const bodyGrad = ctx.createLinearGradient(0, -R, 0, R);
+    bodyGrad.addColorStop(0, c.hullTop);
+    bodyGrad.addColorStop(0.35, c.hullMid);
+    bodyGrad.addColorStop(0.6, c.hullLow);
+    bodyGrad.addColorStop(1, c.hullBot);
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.moveTo(R + 8, 0);
+    ctx.quadraticCurveTo(R - 2, -R * 0.9, -R + 2, -R * 0.7);
+    ctx.lineTo(-R - 3, -R * 0.5);
+    ctx.lineTo(-R - 3, R * 0.5);
+    ctx.lineTo(-R + 2, R * 0.7);
+    ctx.quadraticCurveTo(R - 2, R * 0.9, R + 8, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = c.stroke;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    ctx.fillStyle = c.wing;
+    ctx.beginPath();
+    ctx.moveTo(-R + 3, -R * 0.55);
+    ctx.lineTo(2, -R - 4);
+    ctx.lineTo(R - 2, -R * 0.4);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(-R + 3, R * 0.55);
+    ctx.lineTo(2, R + 4);
+    ctx.lineTo(R - 2, R * 0.4);
+    ctx.closePath();
+    ctx.fill();
+
+    const cockpitGrad = ctx.createRadialGradient(-1, -R * 0.35 - 1, 0, 2, -R * 0.35, 4);
+    cockpitGrad.addColorStop(0, c.cockpit1);
+    cockpitGrad.addColorStop(0.5, c.cockpit2);
+    cockpitGrad.addColorStop(1, c.cockpit3);
+    ctx.fillStyle = cockpitGrad;
+    ctx.beginPath();
+    ctx.arc(2, -R * 0.35, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = c.light;
+    ctx.beginPath();
+    ctx.arc(R + 6, 0, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawGameOver() {
+    ctx.fillStyle = 'rgba(10,3,20,0.7)';
+    ctx.fillRect(0, 0, CFG.width, CFG.height);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ff5c5c';
+    ctx.font = 'bold 44px "Segoe UI", sans-serif';
+    ctx.shadowColor = 'rgba(255,90,90,0.7)';
+    ctx.shadowBlur = 22;
+    ctx.fillText('КОРАБЛЬ УНИЧТОЖЕН', CFG.width / 2, 200);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 30px "Segoe UI", sans-serif';
+    ctx.fillText(`Очки: ${game.score}`, CFG.width / 2, 280);
+
+    const reachedZone = ZONES[game.currentZone];
+    ctx.fillStyle = `hsl(${reachedZone.hue}, 80%, 75%)`;
+    ctx.font = 'bold 18px "Segoe UI", sans-serif';
+    ctx.shadowColor = `hsla(${reachedZone.hue}, 80%, 60%, 0.7)`;
+    ctx.shadowBlur = 12;
+    ctx.fillText(`📍 ${reachedZone.name}`, CFG.width / 2, 315);
+    ctx.shadowBlur = 0;
+
+    const isNewRecord = game.score >= Storage.getBest() && game.score > 0;
+    ctx.fillStyle = isNewRecord ? '#ffe066' : '#c8c8c8';
+    ctx.font = 'bold 20px "Segoe UI", sans-serif';
+    if (isNewRecord) {
+      ctx.shadowColor = 'rgba(255,200,80,0.8)';
+      ctx.shadowBlur = 20;
+      ctx.fillText('🎉 НОВЫЙ РЕКОРД!', CFG.width / 2, 355);
+      ctx.shadowBlur = 0;
+    } else {
+      ctx.fillText(`🥇 Рекорд: ${game.best}`, CFG.width / 2, 355);
+    }
+
+    const bw = 260, bh = 58, bx = (CFG.width - bw) / 2;
+    if (game.deadTimer > 0.5) {
+      const gap = 72, startY = 420;
+      currentButtons = [
+        makeButton(bx, startY + gap * 0, bw, bh, '🔄  НОВЫЙ ЗАПУСК', () => startGame(),     true),
+        makeButton(bx, startY + gap * 1, bw, bh, '🏠  В МЕНЮ',       () => goToMainMenu(), false),
+      ];
+      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.font = '13px "Segoe UI", sans-serif';
+      ctx.fillText('или нажми ПРОБЕЛ', CFG.width / 2, CFG.height - 40);
+    } else {
+      currentButtons = [];
+    }
+    ctx.textAlign = 'start';
+  }
+
+  function drawExitScreen() {
+    ctx.fillStyle = 'rgba(2,1,10,0.9)';
+    ctx.fillRect(0, 0, CFG.width, CFG.height);
+    ctx.textAlign = 'center';
+    const g = ctx.createLinearGradient(0, 250, 0, 350);
+    g.addColorStop(0, '#ffe066');
+    g.addColorStop(0.5, '#ff8ac4');
+    g.addColorStop(1, '#9b6bff');
+    ctx.fillStyle = g;
+    ctx.font = 'bold 44px "Segoe UI", sans-serif';
+    ctx.shadowColor = 'rgba(255,150,220,0.7)';
+    ctx.shadowBlur = 24;
+    ctx.fillText('ДО ВСТРЕЧИ!', CFG.width / 2, 300);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.font = '16px "Segoe UI", sans-serif';
+    ctx.fillText('Спасибо за игру ✨', CFG.width / 2, 360);
+    ctx.fillText('Закрой вкладку, если она не закрылась сама', CFG.width / 2, 395);
+
+    const bw = 260, bh = 58, bx = (CFG.width - bw) / 2, by = 470;
+    currentButtons = [makeButton(bx, by, bw, bh, '🏠  В МЕНЮ', () => goToMainMenu(), true)];
+    ctx.textAlign = 'start';
+  }
+
+  // ============ ГЛАВНЫЙ ЦИКЛ ============
+  function loop(now) {
+    const dt = Math.min(50, now - lastTime);
+    lastTime = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  // ============ ВВОД ============
+  let lastInputTime = 0, lastTap = 0;
+
+  function getCanvasCoords(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left) / rect.width * CFG.width,
+      y: (clientY - rect.top) / rect.height * CFG.height,
+    };
+  }
+
+  function handlePointerDown(clientX, clientY) {
+    const { x, y } = getCanvasCoords(clientX, clientY);
+    for (const btn of currentButtons) {
+      if (isInside(btn, x, y)) {
+        Sound.click();
+        btn.action();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function handleInput(e, clientX, clientY) {
+    if (e) {
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation();
+    }
+    const now = performance.now();
+    if (now - lastInputTime < CFG.inputThrottle) return;
+    lastInputTime = now;
+
+    const consumed = handlePointerDown(clientX, clientY);
+    if (consumed) return;
+
+    if (screen === Screen.PLAY) flap();
+  }
+
+  canvas.addEventListener('touchstart', (e) => {
+    const t = e.changedTouches[0];
+    handleInput(e, t.clientX, t.clientY);
+  }, { passive: false });
+
+  canvas.addEventListener('mousedown', (e) => {
+    handleInput(e, e.clientX, e.clientY);
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    const { x, y } = getCanvasCoords(e.clientX, e.clientY);
+    for (const btn of currentButtons) {
+      btn.hover = isInside(btn, x, y);
+    }
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Enter') {
+      e.preventDefault();
+      const now = performance.now();
+      if (now - lastInputTime < CFG.inputThrottle) return;
+      lastInputTime = now;
+
+      if (screen === Screen.PLAY) flap();
+      else if (screen === Screen.MAIN_MENU) startGame();
+      else if (screen === Screen.DEAD) {
+        if (game.deadTimer > 0.5 && (e.code === 'Space' || e.code === 'Enter')) startGame();
+      } else if (screen === Screen.LEADERBOARD || screen === Screen.ATTEMPTS || screen === Screen.EXIT || screen === Screen.SKINS) {
+        if (e.code === 'Space' || e.code === 'Enter' || e.code === 'Escape') goToMainMenu();
+      }
+    }
+    if (e.code === 'Escape') {
+      e.preventDefault();
+      if (screen !== Screen.MAIN_MENU) goToMainMenu();
+    }
+  });
+
+  document.addEventListener('touchend', (e) => {
+    const now = Date.now();
+    if (now - lastTap < 300) {
+      if (e.cancelable) e.preventDefault();
+    }
+    lastTap = now;
+  }, { passive: false });
+
+  document.addEventListener('gesturestart', (e) => e.preventDefault());
+  document.addEventListener('gesturechange', (e) => e.preventDefault());
+  document.addEventListener('gestureend', (e) => e.preventDefault());
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  document.addEventListener('touchmove', (e) => {
+    if (e.touches.length > 1) e.preventDefault();
+  }, { passive: false });
+  window.addEventListener('wheel', (e) => {
+    if (e.ctrlKey) e.preventDefault();
+  }, { passive: false });
+
+  // ============ СТАРТ ============
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
+  </div>
+  <script src="game.js"></script>
+  <script>
+    // Инициализация Telegram WebApp
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand(); // развернуть на весь экран
+      console.log('User:', tg.initDataUnsafe?.user);
+    }
+  </script>
+</body>
+</html>
